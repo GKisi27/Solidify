@@ -1,0 +1,46 @@
+# Ignore everything in docker build context except needed files
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.Python
+**/env
+**/venv
+**/.venv
+**/ENV
+
+# Node
+**/node_modules
+**/npm-debug.log
+**/build
+**/dist
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Docs (not needed in container)
+docs/
+*.md
+!README.md
+
+# Tests (not needed in production container)
+**/tests
+**/*.test.js
+**/*.spec.js
+**/pytest.ini
+**/conftest.py
+
+# Local env files
+.env*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,56 @@
+# ═══════════════════════════════════════════════════════════════
+# SOLIDIFY - AWS CodeBuild Specification
+# ═══════════════════════════════════════════════════════════════
+
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:=latest}
+
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Building Docker images...
+      
+      # Build Backend
+      - docker build -f docker/backend/Dockerfile -t $BACKEND_REPO_URI:latest .
+      - docker tag $BACKEND_REPO_URI:latest $BACKEND_REPO_URI:$IMAGE_TAG
+      
+      # Build Frontend
+      - docker build -f docker/frontend/Dockerfile -t $FRONTEND_REPO_URI:latest .
+      - docker tag $FRONTEND_REPO_URI:latest $FRONTEND_REPO_URI:$IMAGE_TAG
+      
+      # Build Worker
+      - docker build -f docker/worker/Dockerfile -t $WORKER_REPO_URI:latest .
+      - docker tag $WORKER_REPO_URI:latest $WORKER_REPO_URI:$IMAGE_TAG
+
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - echo Pushing Docker images...
+      
+      # Push Backend
+      - docker push $BACKEND_REPO_URI:latest
+      - docker push $BACKEND_REPO_URI:$IMAGE_TAG
+      
+      # Push Frontend
+      - docker push $FRONTEND_REPO_URI:latest
+      - docker push $FRONTEND_REPO_URI:$IMAGE_TAG
+      
+      # Push Worker
+      - docker push $WORKER_REPO_URI:latest
+      - docker push $WORKER_REPO_URI:$IMAGE_TAG
+      
+      # Write image definitions for ECS
+      - printf '[{"name":"backend","imageUri":"%s"}]' $BACKEND_REPO_URI:$IMAGE_TAG > imagedefinitions-backend.json
+      - printf '[{"name":"worker","imageUri":"%s"}]' $WORKER_REPO_URI:$IMAGE_TAG > imagedefinitions-worker.json
+
+artifacts:
+  files:
+    - imagedefinitions-backend.json
+    - imagedefinitions-worker.json
