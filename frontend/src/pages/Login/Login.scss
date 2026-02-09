@@ -1,0 +1,91 @@
+.Login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  font-family: "SpaceGrotesk";
+
+  .container {
+    padding: 50px 30px;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    background-color: #ffffff;
+    width: 478px;
+    height: 665px;
+    border-radius: 2%;
+    gap: 20px;
+
+    input {
+      width: 380px;
+      height: 56px;
+      border: 2px #cfd7e7 solid;
+      border-radius: 8px;
+    }
+
+    .header {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+
+      .fields {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+
+        .username-field {
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+
+          input {
+            padding: 20px;
+          }
+        }
+
+        .password {
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+
+          .password-input {
+            position: relative;
+
+            input {
+              padding-top: 20px;
+              padding-bottom: 20px;
+              padding-left: 20px;
+              padding-right: 50px;
+            }
+
+            .eye {
+              position: absolute;
+              right: 14px;
+              top: 50%;
+              transform: translateY(-50%);
+              color: #cfd7e7;
+              cursor: pointer;
+              z-index: 2;
+            }
+          }
+        }
+      }
+
+      button {
+        width: 380px;
+        height: 56px;
+        background-color: #135bec;
+        color: #ffffff;
+        border-radius: 10px;
+        border: none;
+      }
+    }
+  }
+}
