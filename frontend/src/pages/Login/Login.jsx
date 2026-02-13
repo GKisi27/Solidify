@@ -1,6 +1,8 @@
 import React from "react";
 import "./Login.scss";
-import VisibilityIcon from "@mui/icons-material/Visibility";
+import PersonOutlineOutlinedIcon from "@mui/icons-material/PersonOutlineOutlined";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 export default function Login() {
   return (
     <div className="Login">
@@ -14,18 +16,32 @@ export default function Login() {
           <div className="fields">
             <div className="username-field">
               <label>Username</label>
-              <input type="text" placeholder="Username" name="username"></input>
+              <div className="user-input">
+                <PersonOutlineOutlinedIcon
+                  className="person"
+                  fontSize="medium"
+                ></PersonOutlineOutlinedIcon>
+                <input
+                  type="text"
+                  placeholder="Enter your username"
+                  name="username"
+                ></input>
+              </div>
             </div>
 
             <div className="password">
               <label>Password</label>
               <div className="password-input">
+                <LockOutlinedIcon
+                  className="lock"
+                  fontSize="medium"
+                ></LockOutlinedIcon>
                 <input
                   type="password"
                   placeholder="Password"
                   name="password"
                 ></input>
-                <VisibilityIcon className="eye"></VisibilityIcon>
+                <VisibilityOutlinedIcon className="eye"></VisibilityOutlinedIcon>
               </div>
               <span>Forgot Password?</span>
             </div>

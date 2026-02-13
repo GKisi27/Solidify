@@ -15,6 +15,7 @@
     height: 665px;
     border-radius: 2%;
     gap: 20px;
+    box-shadow: 0px 12px 100px -10px rgba(0, 0, 0, 0.08);
 
     input {
       width: 380px;
@@ -28,6 +29,7 @@
       flex-direction: column;
       justify-content: center;
       align-items: center;
+      gap: 10px;
     }
 
     form {
@@ -35,18 +37,45 @@
       flex-direction: column;
       gap: 8px;
 
+      input::placeholder {
+        font-size: 16px;
+        font-family: "SpaceGrotesk";
+        color: #4c669a;
+      }
+
+      label {
+        font-family: "SpaceGrotesk";
+      }
+
       .fields {
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 20px;
 
         .username-field {
           display: flex;
           flex-direction: column;
           gap: 5px;
 
-          input {
-            padding: 20px;
+          .user-input {
+            display: flex;
+            align-items: center;
+            position: relative;
+
+            .person {
+              position: absolute;
+              left: 14px;
+              top: 49.5%;
+              transform: translateY(-50%);
+              color: #4c669a;
+              cursor: pointer;
+              z-index: 2;
+            }
+            input {
+              height: 56px;
+              padding: 0 20px 0 50px;
+              line-height: 56px;
+            }
           }
         }
 
@@ -55,22 +84,38 @@
           flex-direction: column;
           gap: 5px;
 
+          span {
+            margin-top: 15px;
+            align-self: flex-end;
+            font-size: 14px;
+            cursor: pointer;
+            color: #135bec;
+            font-weight: bold;
+          }
           .password-input {
             position: relative;
 
             input {
               padding-top: 20px;
               padding-bottom: 20px;
-              padding-left: 20px;
+              padding-left: 50px;
               padding-right: 50px;
             }
-
+            .lock {
+              position: absolute;
+              left: 14px;
+              top: 49.5%;
+              transform: translateY(-50%);
+              color: #4c669a;
+              cursor: pointer;
+              z-index: 2;
+            }
             .eye {
               position: absolute;
               right: 14px;
               top: 50%;
               transform: translateY(-50%);
-              color: #cfd7e7;
+              color: #4c669a;
               cursor: pointer;
               z-index: 2;
             }
@@ -79,12 +124,17 @@
       }
 
       button {
+        margin-top: 20px;
+        font-size: 14px;
+        font-weight: bold;
+        font-family: "SpaceGrotesk";
         width: 380px;
         height: 56px;
         background-color: #135bec;
         color: #ffffff;
         border-radius: 10px;
         border: none;
+        cursor: pointer;
       }
     }
   }
