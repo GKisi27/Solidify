@@ -3,6 +3,7 @@ import "./Login.scss";
 import PersonOutlineOutlinedIcon from "@mui/icons-material/PersonOutlineOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
+import Navbar from "../../components/Navbar/Navbar";
 export default function Login() {
   return (
     <div className="Login">
