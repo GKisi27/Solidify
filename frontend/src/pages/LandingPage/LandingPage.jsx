@@ -15,8 +15,9 @@ import { MdOutlineSpeed } from "react-icons/md";
 import { RxCountdownTimer } from "react-icons/rx";
 import { TbStack } from "react-icons/tb";
 import { Progress } from "@/components/ui/progress";
-
+import { useNavigate } from "react-router-dom";
 const LandingPage = () => {
+  const navigate = useNavigate();
   const inputRef = useRef(null);
 
   const [selectedImage, setSelectedImage] = useState(null);
@@ -27,10 +28,16 @@ const LandingPage = () => {
   useEffect(() => {
     if (processingOpen) {
       setProgress(0);
+
       const interval = setInterval(() => {
         setProgress((prev) => {
           if (prev >= 100) {
             clearInterval(interval);
+
+            setTimeout(() => {
+              navigate("/results");
+            }, 800);
+
             return 100;
           }
           return prev + 10;
@@ -39,7 +46,7 @@ const LandingPage = () => {
 
       return () => clearInterval(interval);
     }
-  }, [processingOpen]);
+  }, [processingOpen, navigate]);
 
   const features = [
     {
@@ -64,7 +71,6 @@ const LandingPage = () => {
 
   return (
     <>
-      
       <div className="flex flex-col items-center mt-20">
         <div className="font-bold text-[40px]">
           Convert your images to 3D images{" "}
@@ -151,7 +157,7 @@ const LandingPage = () => {
               Are you sure you want to convert this image?
             </DialogDescription>
 
-            <DialogFooter >
+            <DialogFooter>
               <Button variant="outline" onClick={() => setConfirmOpen(false)}>
                 Cancel
               </Button>
@@ -186,8 +192,12 @@ const LandingPage = () => {
 
             <div className="bg-[#135BEC]/5 border border-[#135BEC]/10 px-5 py-6 rounded-xl mt-6">
               <div className="flex justify-between mb-2">
-                <span className=" font-medium text-[16px]">Processing Raster Data</span>
-                <span className="text-[#135BEC]text-[14px] font-bold">{progress}%</span>
+                <span className=" font-medium text-[16px]">
+                  Processing Raster Data
+                </span>
+                <span className="text-[#135BEC]text-[14px] font-bold">
+                  {progress}%
+                </span>
               </div>
 
               <Progress
@@ -196,7 +206,10 @@ const LandingPage = () => {
               />
             </div>
 
-            <Button className="bg-[#135BEC] text-white px-4 py-2 rounded-lg text-[14px] mt-6 cursor-pointer"onClick={() => setProcessingOpen(false)}>
+            <Button
+              className="bg-[#135BEC] text-white px-4 py-2 rounded-lg text-[14px] mt-6 cursor-pointer"
+              onClick={() => setProcessingOpen(false)}
+            >
               Cancel Processing
             </Button>
           </div>
