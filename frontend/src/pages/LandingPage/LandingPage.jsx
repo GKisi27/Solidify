@@ -65,7 +65,7 @@ const LandingPage = () => {
   return (
     <>
       
-      <div className="flex flex-col items-center mt-10">
+      <div className="flex flex-col items-center mt-20">
         <div className="font-bold text-[40px]">
           Convert your images to 3D images{" "}
         </div>
@@ -133,7 +133,7 @@ const LandingPage = () => {
         </Card>
       </div>
 
-      <div className="flex justify-center mt-15">
+      <div className="flex justify-center mt-15 ">
         <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
           <DialogTrigger asChild>
             <Button
@@ -173,7 +173,7 @@ const LandingPage = () => {
       <Dialog open={processingOpen} onOpenChange={setProcessingOpen}>
         <DialogContent className="max-w-lg">
           <div className="text-center space-y-6">
-            <img src="/Visual.svg" alt="processing" className="mx-auto w-24" />
+            <img src="/Visual.png" alt="processing" className="mx-auto w-24" />
 
             <div className="text-[24px] font-bold text-[#111827]">
               Analyzing image and generating 3D path...
@@ -203,7 +203,7 @@ const LandingPage = () => {
         </DialogContent>
       </Dialog>
 
-      <div className="flex justify-center gap-6 mt-20">
+      <div className="flex justify-center gap-6 mt-20 mb-15">
         {features.map((item, index) => (
           <div key={index} className="bg-white w-60 p-6 border rounded-2xl">
             {item.icon}
