@@ -22,28 +22,28 @@ help:
 # Development
 # ─────────────────────────────────────────────────────────────────
 dev:
-	docker-compose up -d
+	docker compose up -d
 	@echo "✓ Development environment started"
 	@echo "  Frontend: http://localhost:3000"
 	@echo "  Backend:  http://localhost:8000"
 	@echo "  API Docs: http://localhost:8000/docs"
 
 stop:
-	docker-compose down
+	docker compose down
 	@echo "✓ Development environment stopped"
 
 logs:
-	docker-compose logs -f
+	docker compose logs -f
 
 # ─────────────────────────────────────────────────────────────────
 # Build
 # ─────────────────────────────────────────────────────────────────
 build:
-	docker-compose build
+	docker compose build
 	@echo "✓ All images built"
 
 build-prod:
-	docker-compose -f docker-compose.prod.yml build
+	docker compose -f docker-compose.prod.yml build
 	@echo "✓ Production images built"
 
 # ─────────────────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ format:
 # Cleanup
 # ─────────────────────────────────────────────────────────────────
 clean:
-	docker-compose down -v --remove-orphans
+	docker compose down -v --remove-orphans
 	docker system prune -f
 	@echo "✓ Cleanup complete"
 

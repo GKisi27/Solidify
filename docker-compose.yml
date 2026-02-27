@@ -1,83 +1,51 @@
-# ═══════════════════════════════════════════════════════════════
-# SOLIDIFY - Docker Compose (Development)
-# ═══════════════════════════════════════════════════════════════
-
-version: '3.8'
+version: '3.9'
 
 services:
-  # ─────────────────────────────────────────────────────────────
-  # Redis (Message Broker & Cache)
-  # ─────────────────────────────────────────────────────────────
-  redis:
-    image: redis:7-alpine
-    container_name: solidify-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ─────────────────────────────────────────────────────────────
-  # Backend (FastAPI)
-  # ─────────────────────────────────────────────────────────────
   backend:
     build:
-      context: .
-      dockerfile: docker/backend/Dockerfile
-    container_name: solidify-backend
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fastapi_app
     ports:
       - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
     environment:
-      - REDIS_URL=redis://redis:6379/0
-    env_file:
-      - .env
+      DATABASE_URL: postgresql://postgres:1@postgres:5432/mydb
+      REDIS_HOST: redis
+      DATA_DIR: /solidify/data
     volumes:
       - ./backend:/app
-    depends_on:
-      redis:
-        condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      - ./data:/solidify/data
 
-  # ─────────────────────────────────────────────────────────────
-  # Worker (Celery)
-  # ─────────────────────────────────────────────────────────────
-  worker:
-    build:
-      context: .
-      dockerfile: docker/worker/Dockerfile
-    container_name: solidify-worker
-    environment:
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-    env_file:
-      - .env
-    volumes:
-      - ./worker:/app
-    depends_on:
-      redis:
-        condition: service_healthy
-    command: celery -A celery_app worker --loglevel=info
-
-  # ─────────────────────────────────────────────────────────────
-  # Frontend (React Development Server)
-  # ─────────────────────────────────────────────────────────────
   frontend:
     build:
-      context: .
-      dockerfile: docker/frontend/Dockerfile
-    container_name: solidify-frontend
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: react_app
     ports:
-      - "3000:3000"
+      - "3001:80"
+    depends_on:
+      - backend
+
+  postgres:
+    image: postgres:15.5
+    container_name: postgres_db
     environment:
-      - REACT_APP_API_URL=http://localhost:8000
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1
+      POSTGRES_DB: mydb
+    ports:
+      - "5434:5432"
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    command: npm start
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: redis_cache
+    ports:
+      - "6381:6379"
 
 volumes:
-  redis_data:
+  postgres_data:
