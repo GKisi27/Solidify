@@ -38,10 +38,9 @@ async def login(username: str = Form(...), password: str = Form(...)):
                 "username": result['username']
             }
         else:
-           raise HTTPException(status_code=401, detail="Invalid username or password")
+           return {"detail":"Invalid username or password"}
 
-    except HTTPException:
-        raise  
+    
     except Exception as e:
         return {"success": False, "detail": str(e)}
 
