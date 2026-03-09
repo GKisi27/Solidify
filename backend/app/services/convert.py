@@ -48,6 +48,8 @@
 
 #     return data["prompt"]
 
+
+
 # def sanitize_name(name: str) -> str:
 #     """Strip unsafe characters from a filename stem."""
 #     return "".join(c for c in name if c.isalnum() or c in ("-", "_"))
@@ -110,7 +112,7 @@
 #     image: Image.Image,
 #     prompt: str,
 #     client: genai.Client,
-#     model: str = "gemini-3.1-pro-preview",
+#     model: str = "gemini-3-pro-preview",
 # ) -> dict:
 #     """
 #     Send an image + prompt to Gemini and return the parsed JSON response.
@@ -120,7 +122,7 @@
 #     """
 #     config = types.GenerateContentConfig(
 #         response_mime_type="application/json",
-#         temperature=0.2,
+#         temperature=1,
 #     )
 
 #     response = client.models.generate_content(
@@ -296,122 +298,29 @@
 #     """
 #     Transform Gemini-output JSON into the Onshape-ready JSON format.
 
-#     - For plates → convert all views normally.
-#     - For shafts (revolve_axis present) →
-#         * Convert FRONT normally
-#         * Detect SECTION view
-#         * Project SECTION entities into FRONT
-#         * Return only FRONT view
+#     Preserves the optional ``revolve_axis`` key when present.
 #     """
-
 #     output: dict = {"views": []}
-#     revolve_axis = gemini_json.get("revolve_axis")
 
-#     if revolve_axis:
-#         output["revolve_axis"] = revolve_axis
+#     if "revolve_axis" in gemini_json:
+#         output["revolve_axis"] = gemini_json["revolve_axis"]
 
-#     # --------------------------------------------------
-#     # Normalize view names
-#     # --------------------------------------------------
-#     raw_views: dict[str, dict] = {}
-#     for view in gemini_json.get("views", []):
-#         name = view.get("name", "").strip().lower()
-#         raw_views[name] = view
-
-#     # --------------------------------------------------
-#     # Detect section view robustly
-#     # --------------------------------------------------
-#     section_view = None
-#     for name, view in raw_views.items():
-#         if any(key in name for key in ["section", "a-a", "aa", "cut"]):
-#             section_view = view
-#             break
-
-#     # --------------------------------------------------
-#     # SHAFT CASE (revolve)
-#     # --------------------------------------------------
-#     if revolve_axis:
-
-#         front_view = raw_views.get("front")
-#         if not front_view:
-#             raise ValueError("Front view is required for shaft conversion.")
-
-#         # ---- Convert FRONT normally using your arc logic ----
-#         front_intermediates = [
-#             _intermediate_entity(e) for e in front_view.get("entities", [])
-#         ]
-#         converted_front = [
-#             _convert_entity(e, i, front_intermediates)
-#             for i, e in enumerate(front_intermediates)
-#         ]
-
-#         # ---- If section exists, project into FRONT ----
-#         if section_view:
-
-#             axis_start = np.array([revolve_axis["start_x"], revolve_axis["start_y"]])
-#             axis_end   = np.array([revolve_axis["end_x"], revolve_axis["end_y"]])
-#             axis_vec   = axis_end - axis_start
-
-#             horizontal_axis = abs(axis_vec[1]) < abs(axis_vec[0])
-
-#             section_intermediates = [
-#                 _intermediate_entity(e) for e in section_view.get("entities", [])
-#             ]
-
-#             for ent in section_intermediates:
-
-#                 if ent["type"] == "circle":
-
-#                     if horizontal_axis:
-#                         projected = {
-#                             "type": "CIRCLE",
-#                             "center_x": round(ent["center_x"], 2),
-#                             "center_y": round(axis_start[1], 2),
-#                             "radius": round(ent["radius"], 2),
-#                         }
-#                     else:
-#                         projected = {
-#                             "type": "CIRCLE",
-#                             "center_x": round(axis_start[0], 2),
-#                             "center_y": round(ent["center_y"], 2),
-#                             "radius": round(ent["radius"], 2),
-#                         }
-
-#                     converted_front.append(projected)
-
-#                 elif ent["type"] in ["line", "arc"]:
-#                     # Convert section geometry using same arc logic
-#                     idx = section_intermediates.index(ent)
-#                     converted = _convert_entity(ent, idx, section_intermediates)
-#                     converted_front.append(converted)
-
-#         output["views"].append({
-#             "name": "front",
-#             "entities": converted_front,
-#             "metadata": front_view.get("metadata", {"units": "mm", "scale": 1}),
-#         })
-
-#         return output
-
-#     # --------------------------------------------------
-#     # PLATE CASE (normal multi-view workflow)
-#     # --------------------------------------------------
-#     for view in gemini_json.get("views", []):
+#     for view in gemini_json["views"]:
 #         intermediates = [_intermediate_entity(e) for e in view["entities"]]
-#         converted     = [
-#             _convert_entity(e, i, intermediates)
-#             for i, e in enumerate(intermediates)
-#         ]
+#         converted     = [_convert_entity(e, i, intermediates) for i, e in enumerate(intermediates)]
 
 #         output["views"].append({
-#             "name": view["name"],
+#             "name":     view["name"],
 #             "entities": converted,
 #             "metadata": view.get("metadata", {"units": "mm", "scale": 1}),
 #         })
 
 #     return output
 
+
+
 # _MM_TO_M = 1 / 1000
+
 
 # def _line_sketch_entity(entity: dict, uid: str) -> dict:
 #     dx = (entity["end_x"] - entity["start_x"]) * _MM_TO_M
@@ -531,7 +440,7 @@
 #         return resp.json()
 
 
-#     def create_document(self, name: str = "3D model UI") -> tuple[str, str, str]:
+#     def create_document(self, name: str = "CNavi Model") -> tuple[str, str, str]:
 #         """
 #         Create a new Onshape document and locate its Part Studio element.
 
@@ -863,7 +772,7 @@
 #     save_json(gemini_json, converted_json)
 
 #     session = OnshapeSession(cfg["onshape_access"], cfg["onshape_secret"], cfg["onshape_base"])
-#     did, wid, eid = session.create_document("3D UI")
+#     did, wid, eid = session.create_document("CNavi Model")
 #     features_url = session.features_url(did, wid, eid)
 
 #     is_shaft = "revolve_axis" in converted_json
@@ -879,6 +788,11 @@
 
 #     doc_url = f"{cfg['onshape_base']}/documents/{did}/w/{wid}/e/{eid}"
 #     return doc_url, gemini_path, converted_path
+
+
+
+
+
 
 
 
@@ -902,6 +816,10 @@ from onshape_client.client import Client
 from app.services.to_db import save_image, save_json
 
 
+# ---------------------------------------------------------------------------
+# Configuration & I/O helpers
+# ---------------------------------------------------------------------------
+
 def load_config() -> dict:
     """Load environment variables and return a config dict."""
     load_dotenv()
@@ -911,7 +829,7 @@ def load_config() -> dict:
         "onshape_access":  os.getenv("access"),
         "onshape_secret":  os.getenv("secret"),
         "onshape_base":    "https://cad.onshape.com",
-        "gemini_model":    "gemini-3-pro-preview",
+        "gemini_model":    "gemini-3.1-pro-preview",
     }
 
     missing = [k for k, v in config.items() if not v and k != "onshape_base"]
@@ -923,24 +841,22 @@ def load_config() -> dict:
 
 def load_prompt(prompt_file: str = "prompt.yml") -> str:
     """Load the Gemini prompt from a YAML file."""
-    
     base_dir = Path(__file__).resolve().parent
-    full_path = base_dir / prompt_file 
-
+    full_path = base_dir / prompt_file
 
     with open(full_path, "r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
 
     return data["prompt"]
 
+
 def sanitize_name(name: str) -> str:
     """Strip unsafe characters from a filename stem."""
     return "".join(c for c in name if c.isalnum() or c in ("-", "_"))
 
+
 def make_output_paths(file_stem: str, output_dir: str | None = None) -> tuple[Path, Path]:
     file_name_only = Path(file_stem).stem
-
-    # Use environment variable first
     data_dir = os.getenv("DATA_DIR")
 
     if output_dir:
@@ -948,7 +864,6 @@ def make_output_paths(file_stem: str, output_dir: str | None = None) -> tuple[Pa
     elif data_dir:
         base = Path(data_dir) / file_name_only
     else:
-        # fallback for local dev (optional)
         current_folder = Path(__file__).resolve().parent
         base_project_folder = current_folder
         while base_project_folder.name != "Solidify":
@@ -960,7 +875,6 @@ def make_output_paths(file_stem: str, output_dir: str | None = None) -> tuple[Pa
     base.mkdir(parents=True, exist_ok=True)
 
     safe = sanitize_name(file_name_only)
-
     gemini_path    = base / f"{safe}_gemini.json"
     converted_path = base / f"{safe}_converted.json"
 
@@ -969,6 +883,10 @@ def make_output_paths(file_stem: str, output_dir: str | None = None) -> tuple[Pa
 
     return gemini_path, converted_path
 
+
+# ---------------------------------------------------------------------------
+# Image helpers
+# ---------------------------------------------------------------------------
 
 def prepare_image(image: Image.Image) -> Image.Image:
     """Ensure the image is in RGB mode, converting if necessary."""
@@ -986,6 +904,10 @@ def open_image(source: str | Path | bytes | BytesIO) -> Image.Image:
     return Image.open(source)
 
 
+# ---------------------------------------------------------------------------
+# Gemini client
+# ---------------------------------------------------------------------------
+
 def get_gemini_client(api_key: str) -> genai.Client:
     """Instantiate and return a Gemini client."""
     return genai.Client(api_key=api_key)
@@ -995,7 +917,7 @@ def call_gemini(
     image: Image.Image,
     prompt: str,
     client: genai.Client,
-    model: str = "gemini-3.1-pro-preview",
+    model: str = "gemini-3.0-pro-preview",
 ) -> dict:
     """
     Send an image + prompt to Gemini and return the parsed JSON response.
@@ -1005,7 +927,7 @@ def call_gemini(
     """
     config = types.GenerateContentConfig(
         response_mime_type="application/json",
-        temperature=0.2,
+        temperature=1,
     )
 
     response = client.models.generate_content(
@@ -1020,6 +942,9 @@ def call_gemini(
         raise ValueError(f"Gemini returned non-JSON response: {exc}") from exc
 
 
+# ---------------------------------------------------------------------------
+# Geometry helpers
+# ---------------------------------------------------------------------------
 
 def _unit_vector(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Return the unit direction vector from point *a* to point *b*."""
@@ -1053,7 +978,6 @@ def _arc_center(
     c2 = mid - h * perp
 
     def tangency_score(center: np.ndarray, point: np.ndarray, seg: dict) -> float:
-        """Dot product of arc tangent with adjacent line direction at *point*."""
         to_c = center - point
         norm  = np.linalg.norm(to_c)
         if norm == 0:
@@ -1072,12 +996,9 @@ def _arc_center(
 
 
 def _cad_angle(point: np.ndarray, center: np.ndarray) -> float:
-    """
-    Compute the Onshape-convention angle (clockwise from +X) in degrees.
-    """
+    """Compute the Onshape-convention angle (clockwise from +X) in degrees."""
     angle = math.degrees(math.atan2(point[1] - center[1], point[0] - center[0]))
-    angle = (-angle) % 360
-    return angle
+    return (-angle) % 360
 
 
 def _is_clockwise(start: np.ndarray, end: np.ndarray, center: np.ndarray) -> bool:
@@ -1096,6 +1017,9 @@ def _normalize_cw_angles(start: float, end: float) -> tuple[float, float]:
     return start, end
 
 
+# ---------------------------------------------------------------------------
+# JSON conversion: Gemini output → Onshape-ready format
+# ---------------------------------------------------------------------------
 
 def _intermediate_entity(raw: dict) -> dict:
     """Convert a raw Gemini entity into a normalised intermediate dict."""
@@ -1177,70 +1101,107 @@ def _convert_entity(entity: dict, idx: int, siblings: list[dict]) -> dict:
     raise ValueError(f"Unhandled intermediate entity type: {kind}")
 
 
+def _detect_section_view(views: list[dict]) -> dict | None:
+    """Return the first view whose name suggests it is a section / cut view."""
+    SECTION_KEYWORDS = {"section", "a-a", "aa", "cut"}
+    for view in views:
+        name = view.get("name", "").strip().lower()
+        if any(kw in name for kw in SECTION_KEYWORDS):
+            return view
+    return None
+
+
+def _project_section_circle(circle: dict, revolve_axis: dict) -> dict:
+    """
+    Project a section-view circle onto the front-view plane using the revolve axis.
+
+    For a horizontal axis the circle's X coordinate is kept and its Y is
+    snapped to the axis; for a vertical axis the opposite applies.  This
+    preserves the radial information (which drives the revolved profile)
+    while discarding the out-of-plane offset that is meaningless in the
+    front view.
+    """
+    axis_vec = np.array([
+        revolve_axis["end_x"] - revolve_axis["start_x"],
+        revolve_axis["end_y"] - revolve_axis["start_y"],
+    ])
+    horizontal_axis = abs(axis_vec[0]) >= abs(axis_vec[1])
+
+    if horizontal_axis:
+        return {
+            "type":     "CIRCLE",
+            "center_x": round(circle["center_x"], 2),
+            "center_y": round(revolve_axis["start_y"], 2),
+            "radius":   round(circle["radius"], 2),
+        }
+    else:
+        return {
+            "type":     "CIRCLE",
+            "center_x": round(revolve_axis["start_x"], 2),
+            "center_y": round(circle["center_y"], 2),
+            "radius":   round(circle["radius"], 2),
+        }
+
+
+def _convert_section_entities(
+    section_view: dict,
+    revolve_axis: dict | None,
+) -> list[dict]:
+    """
+    Convert section-view entities into front-view-ready Onshape entities.
+
+    - CIRCLEs: projected onto the front plane when a revolve axis is present;
+      copied as-is for plate parts (axis is None).
+    - ARCs: converted normally using the same tangency-aware arc logic.
+    - LINEs: converted normally.
+    """
+    raw_entities = section_view.get("entities", [])
+    intermediates = [_intermediate_entity(e) for e in raw_entities]
+    result: list[dict] = []
+
+    for idx, ent in enumerate(intermediates):
+        if ent["type"] == "circle" and revolve_axis is not None:
+            result.append(_project_section_circle(ent, revolve_axis))
+        else:
+            result.append(_convert_entity(ent, idx, intermediates))
+
+    return result
+
+
 def convert_json_format(gemini_json: dict) -> dict:
     """
     Transform Gemini-output JSON into the Onshape-ready JSON format.
 
-    - All views (plates and shafts) are converted in a single unified loop.
-    - Section view detection uses keywords: "section", "a-a", "aa"
-      (note: "cut" is intentionally excluded to match app.py behaviour).
-    - Section entities (CIRCLE and ARC) are appended to ANY "front" view,
-      regardless of whether the part is a shaft or a plate.
-    - Section ARCs are hardcoded to center (0, 0), angles 0→360 (app.py behaviour).
-    - No axis-direction-based projection is applied to section circles;
-      coordinates are copied as-is from the section view.
-    """
+    Unified workflow for both plates and shafts:
 
+    1.  Detect an optional section / cut view.
+    2.  Convert all non-section views normally.
+    3.  For the *front* view, append converted section entities:
+        - Section circles are projected onto the front plane using the revolve
+          axis direction (shafts) or copied as-is (plates).
+        - Section arcs and lines are converted with the normal arc logic.
+    4.  Preserve ``revolve_axis`` in the output when present.
+    """
     output: dict = {"views": []}
-    revolve_axis = gemini_json.get("revolve_axis")
+    revolve_axis  = gemini_json.get("revolve_axis")
 
     if revolve_axis:
         output["revolve_axis"] = revolve_axis
 
-    # --------------------------------------------------
-    # Detect section view — "cut" keyword excluded
-    # --------------------------------------------------
-    section_view = None
-    for view in gemini_json.get("views", []):
-        name = view.get("name", "").strip().lower()
-        if any(key in name for key in ["section", "a-a", "aa"]):
-            section_view = view
-            break
+    raw_views = gemini_json.get("views", [])
+    section_view = _detect_section_view(raw_views)
 
-    # --------------------------------------------------
-    # Collect section inner entities (CIRCLE and ARC only)
-    # These will be appended as-is to the front view.
-    # --------------------------------------------------
-    section_inner_entities: list[dict] = []
-    if section_view:
-        for e in section_view.get("entities", []):
-            t = e.get("type", "").upper()
-            if t == "CIRCLE":
-                # Copy coordinates as-is — no axis projection
-                section_inner_entities.append({
-                    "type":     "CIRCLE",
-                    "center_x": round(e.get("center_x", 0.0), 2),
-                    "center_y": round(e.get("center_y", 0.0), 2),
-                    "radius":   round(e.get("radius",   0.0), 2),
-                })
-            elif t == "ARC":
-                # Hardcode center/angles as per app.py behaviour
-                section_inner_entities.append({
-                    "type":        "ARC",
-                    "center_x":    0.0,
-                    "center_y":    0.0,
-                    "radius":      round(e.get("radius", 0.0), 2),
-                    "start_angle": 0.0,
-                    "end_angle":   360.0,
-                    "clockwise":   True,
-                })
+    # Pre-convert section entities once so we can reuse them.
+    section_entities: list[dict] = []
+    if section_view is not None:
+        section_entities = _convert_section_entities(section_view, revolve_axis)
 
-    # --------------------------------------------------
-    # Convert ALL views in a single unified loop
-    # (no separate shaft / plate branching)
-    # --------------------------------------------------
-    for view in gemini_json.get("views", []):
-        view_name = view.get("name", "")
+    for view in raw_views:
+        view_name = view.get("name", "").strip()
+
+        # Skip section views — their content is merged into the front view.
+        if view is section_view:
+            continue
 
         intermediates = [_intermediate_entity(e) for e in view.get("entities", [])]
         converted = [
@@ -1248,9 +1209,9 @@ def convert_json_format(gemini_json: dict) -> dict:
             for i, e in enumerate(intermediates)
         ]
 
-        # Append section-derived entities to any "front" view
-        if view_name.strip().lower() == "front" and section_inner_entities:
-            converted.extend(section_inner_entities)
+        # Merge section geometry into the front view.
+        if view_name.lower() == "front" and section_entities:
+            converted.extend(section_entities)
 
         output["views"].append({
             "name":     view_name,
@@ -1260,7 +1221,13 @@ def convert_json_format(gemini_json: dict) -> dict:
 
     return output
 
+
+# ---------------------------------------------------------------------------
+# Onshape sketch-entity builders
+# ---------------------------------------------------------------------------
+
 _MM_TO_M = 1 / 1000
+
 
 def _line_sketch_entity(entity: dict, uid: str) -> dict:
     dx = (entity["end_x"] - entity["start_x"]) * _MM_TO_M
@@ -1356,6 +1323,10 @@ def build_sketch_entities(
     return (sketch_entities, last_id) if return_last_id else sketch_entities
 
 
+# ---------------------------------------------------------------------------
+# Onshape session
+# ---------------------------------------------------------------------------
+
 class OnshapeSession:
     """Thin wrapper around the Onshape REST API for this converter."""
 
@@ -1379,7 +1350,6 @@ class OnshapeSession:
         resp.raise_for_status()
         return resp.json()
 
-
     def create_document(self, name: str = "3D model UI") -> tuple[str, str, str]:
         """
         Create a new Onshape document and locate its Part Studio element.
@@ -1401,6 +1371,9 @@ class OnshapeSession:
     def features_url(self, did: str, wid: str, eid: str) -> str:
         return f"{self.base}/api/v7/partstudios/d/{did}/w/{wid}/e/{eid}/features"
 
+    # ------------------------------------------------------------------
+    # Payload builders
+    # ------------------------------------------------------------------
 
     def _sketch_payload(
         self,
@@ -1509,10 +1482,14 @@ class OnshapeSession:
             },
         }
 
+    # ------------------------------------------------------------------
+    # Feature posting helpers
+    # ------------------------------------------------------------------
+
     def add_sketch(
         self, url: str, name: str, view_name: str, sketch_entities: list[dict]
     ) -> str:
-        """Post a sketch feature; return its featureId."""
+        """Post a sketch feature and return its featureId."""
         payload = self._sketch_payload(name, view_name, sketch_entities)
         data = self._post(url, payload)
         return data["feature"]["featureId"]
@@ -1535,6 +1512,10 @@ class OnshapeSession:
         data    = self._post(url, payload)
         return data["feature"]["featureId"]
 
+    # ------------------------------------------------------------------
+    # Axis entity builder
+    # ------------------------------------------------------------------
+
     def _build_axis_entity(self, axis_data: dict, entity_id: str = "revolve-axis") -> dict:
         """Return a construction-line sketch entity dict for the revolve axis."""
         return {
@@ -1548,11 +1529,78 @@ class OnshapeSession:
                 "dirX":   (axis_data["end_x"] - axis_data["start_x"]) * _MM_TO_M,
                 "dirY":   (axis_data["end_y"] - axis_data["start_y"]) * _MM_TO_M,
             },
-            "entityId":      entity_id,
-            "startPointId":  f"{entity_id}.start",
-            "endPointId":    f"{entity_id}.end",
+            "entityId":       entity_id,
+            "startPointId":   f"{entity_id}.start",
+            "endPointId":     f"{entity_id}.end",
             "isConstruction": True,
         }
+
+    def _resolve_axis(
+        self,
+        features_url: str,
+        view_name: str,
+        idx: int,
+        revolve_axis: dict | None,
+        sketch_entities: list[dict],
+        view_entities: list[dict],
+    ) -> tuple[str | None, str | None, list[dict]]:
+        """
+        Attempt to post a dedicated axis sketch.  Falls back to appending a
+        horizontal construction line to *sketch_entities* when the dedicated
+        sketch fails or no axis data is available.
+
+        Returns:
+            (axis_sketch_fid, axis_entity_id, sketch_entities)
+            axis_sketch_fid is None when the axis was appended inline.
+        """
+        axis_sketch_fid: str | None = None
+        axis_entity_id:  str | None = None
+
+        if revolve_axis and isinstance(revolve_axis, dict) and "start_x" in revolve_axis:
+            axis_id     = "revolve-axis"
+            axis_entity = self._build_axis_entity(revolve_axis, axis_id)
+            try:
+                axis_sketch_fid = self.add_sketch(
+                    features_url,
+                    f"SketchAxis {idx} ({view_name})",
+                    view_name,
+                    [axis_entity],
+                )
+                axis_entity_id = axis_id
+            except requests.HTTPError:
+                axis_sketch_fid = None
+
+        # Fallback: embed axis as construction line in the profile sketch.
+        if not axis_sketch_fid:
+            max_x = max(
+                (e.get("end_x", 0) for e in view_entities if "end_x" in e),
+                default=100,
+            ) * _MM_TO_M
+            axis_id     = "revolve-axis-line"
+            axis_entity = {
+                "btType":     "BTMSketchCurveSegment-155",
+                "startParam": 0.0,
+                "endParam":   1.0,
+                "geometry": {
+                    "btType": "BTCurveGeometryLine-117",
+                    "pntX":   0.0,
+                    "pntY":   0.0,
+                    "dirX":   max_x,
+                    "dirY":   0.0,
+                },
+                "entityId":       axis_id,
+                "startPointId":   f"{axis_id}.start",
+                "endPointId":     f"{axis_id}.end",
+                "isConstruction": True,
+            }
+            sketch_entities = [*sketch_entities, axis_entity]
+            axis_entity_id  = axis_id
+
+        return axis_sketch_fid, axis_entity_id, sketch_entities
+
+    # ------------------------------------------------------------------
+    # High-level build workflows
+    # ------------------------------------------------------------------
 
     def build_plate(self, features_url: str, views: list[dict]) -> None:
         """Extrude-intersect plate workflow."""
@@ -1575,8 +1623,8 @@ class OnshapeSession:
                 sketch_entities,
             )
 
-            operation         = "NEW" if prev_fid is None else "INTERSECT"
-            opposite_dir      = prev_fid is None         
+            operation    = "NEW" if prev_fid is None else "INTERSECT"
+            opposite_dir = prev_fid is None
 
             prev_fid = self.add_extrude(
                 features_url,
@@ -1606,51 +1654,12 @@ class OnshapeSession:
 
             sketch_entities, last_id = build_sketch_entities(entities, return_last_id=True)
 
-            # --- Axis sketch (dedicated) ---
-            axis_sketch_fid: str | None = None
-            axis_entity_id: str | None  = None
+            axis_sketch_fid, axis_entity_id, sketch_entities = self._resolve_axis(
+                features_url, view_name, idx, revolve_axis, sketch_entities, entities
+            )
+            if not axis_entity_id:
+                axis_entity_id = last_id
 
-            if revolve_axis and isinstance(revolve_axis, dict) and "start_x" in revolve_axis:
-                axis_id     = "revolve-axis"
-                axis_entity = self._build_axis_entity(revolve_axis, axis_id)
-                try:
-                    axis_sketch_fid = self.add_sketch(
-                        features_url,
-                        f"SketchAxis {idx} ({view_name})",
-                        view_name,
-                        [axis_entity],
-                    )
-                    axis_entity_id = axis_id
-                except requests.HTTPError:
-                    axis_sketch_fid = None
-
-            # Fallback: append horizontal axis to profile sketch
-            if not axis_sketch_fid:
-                max_x = max(
-                    (e.get("end_x", 0) for e in entities if "end_x" in e),
-                    default=100,
-                ) * _MM_TO_M
-                axis_id     = "revolve-axis-line"
-                axis_entity = {
-                    "btType":     "BTMSketchCurveSegment-155",
-                    "startParam": 0.0,
-                    "endParam":   1.0,
-                    "geometry": {
-                        "btType": "BTCurveGeometryLine-117",
-                        "pntX":   0.0,
-                        "pntY":   0.0,
-                        "dirX":   max_x,
-                        "dirY":   0.0,
-                    },
-                    "entityId":       axis_id,
-                    "startPointId":   f"{axis_id}.start",
-                    "endPointId":     f"{axis_id}.end",
-                    "isConstruction": True,
-                }
-                sketch_entities.append(axis_entity)
-                axis_entity_id = axis_id
-
-            # Profile sketch
             sketch_fid = self.add_sketch(
                 features_url,
                 f"Sketch {idx} ({view_name})",
@@ -1659,9 +1668,6 @@ class OnshapeSession:
             )
 
             axis_ref = axis_sketch_fid if axis_sketch_fid else sketch_fid
-            if not axis_entity_id:
-                axis_entity_id = last_id
-
             operation = "NEW" if prev_fid is None else "INTERSECT"
             prev_fid  = self.add_revolve(
                 features_url,
@@ -1674,56 +1680,60 @@ class OnshapeSession:
             time.sleep(0.2)
 
 
+# ---------------------------------------------------------------------------
+# Top-level pipeline
+# ---------------------------------------------------------------------------
+
 def convert_to_3d(
     image: str | Path | bytes | BytesIO,
     file_stem: str,
     image_bytes: bytes,
     *,
     prompt_file: str = "prompt.yml",
-    output_dir: str | None = None
-) -> str:
+    output_dir: str | None = None,
+) -> tuple[str, Path, Path]:
     """
     Full pipeline: image → Gemini → JSON → Onshape 3D model.
 
     Args:
-        image_source: File path, raw bytes, or BytesIO of the input image.
+        image:        File path, raw bytes, or BytesIO of the input image.
         file_stem:    Stem used for output file names (e.g. ``"bracket"``).
+        image_bytes:  Raw bytes of the image (saved to DB).
         prompt_file:  Path to the YAML file containing the Gemini prompt.
-        output_dir:   Directory for output JSON files (defaults to cwd).
+        output_dir:   Directory for output JSON files (defaults to project data dir).
 
     Returns:
-        URL to the generated Onshape document.
+        (onshape_document_url, gemini_json_path, converted_json_path)
     """
     cfg = load_config()
-    
+
     save_image(image_bytes)
 
-
     gemini_client = get_gemini_client(cfg["gemini_api_key"])
-    prompt = load_prompt(prompt_file)
-    gemini_json = call_gemini(image, prompt, gemini_client, model=cfg["gemini_model"])
+    prompt        = load_prompt(prompt_file)
+    gemini_json   = call_gemini(image, prompt, gemini_client, model=cfg["gemini_model"])
 
     gemini_path, converted_path = make_output_paths(file_stem, output_dir)
     gemini_path.write_text(json.dumps(gemini_json, indent=2, ensure_ascii=False), encoding="utf-8")
 
     converted_json = convert_json_format(gemini_json)
     converted_path.write_text(json.dumps(converted_json, indent=2), encoding="utf-8")
-    
+
     save_json(gemini_json, converted_json)
 
-    session = OnshapeSession(cfg["onshape_access"], cfg["onshape_secret"], cfg["onshape_base"])
+    session      = OnshapeSession(cfg["onshape_access"], cfg["onshape_secret"], cfg["onshape_base"])
     did, wid, eid = session.create_document("3D UI")
-    features_url = session.features_url(did, wid, eid)
+    features_url  = session.features_url(did, wid, eid)
 
-    is_shaft = "revolve_axis" in converted_json
+    is_shaft     = "revolve_axis" in converted_json
     revolve_axis = converted_json.get("revolve_axis")
-    views = converted_json.get("views", [])
+    views        = converted_json.get("views", [])
 
     if is_shaft:
         session.build_shaft(features_url, views, revolve_axis)
     else:
         session.build_plate(features_url, views)
-        
+
     print(gemini_path, converted_path)
 
     doc_url = f"{cfg['onshape_base']}/documents/{did}/w/{wid}/e/{eid}"
