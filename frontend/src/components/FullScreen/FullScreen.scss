@@ -1,0 +1,58 @@
+.fullscreen {
+  width: 1900px;
+  height: 900px;
+  font-family: "SpaceGrotesk";
+  border-radius: 16px;
+  background-color: #e2e8f0;
+  padding: 30px 30px;
+  .top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    span {
+      font-weight: bold;
+      position: relative;
+      font-size: 20px;
+      &::after {
+        content: "ACTIVE VIEW";
+        margin-left: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 8px;
+        border-radius: 6px;
+        background-color: #dbeafe;
+        color: #1d4ed8;
+      }
+    }
+    button {
+      display: flex;
+      align-items: center;
+      gap: 8px; // space between icon and text
+
+      background-color: white;
+      padding: 10px 16px;
+      border: 1px #e2e8f0 solid;
+      border-radius: 8px;
+      font-weight: bold;
+      font-family: "SpaceGrotesk";
+      cursor: pointer;
+    }
+
+    .icon {
+      font-size: 18px;
+      color: #4c669a;
+    }
+  }
+  .bottom {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 80px;
+    .Placeholder {
+      width: 1242px;
+      height: 618px;
+      background-color: #fbfbfb;
+    }
+  }
+}

@@ -1,0 +1,133 @@
+prompt: |
+        Analyze the provided 2D mechanical CAD image that contains multiple views (front, top, right, etc.). If it is a plate then, perform the below activities. If the image is a shaft then avoid the "PLATE" instructions and head straight to "SHAFT" instructions.
+                
+            PLATE:
+            
+            The image contains a contour defined by a sequence of lines, arcs, and circles, along with associated 
+            dimensions (lengths and radii). Your task is to accurately extract the coordinates of all unique 
+            vertices, which include the endpoints of straight line segments and the tangency points of arc segments, 
+            that define the main visible geometry's contour. Do NOT take dimensions and extension lines as part of 
+            the geometry. 
+
+            Steps for Coordinate Extraction:
+
+            1. Determine the Bounding Box:
+            - Calculate the absolute minimum X and minimum Y values for the entire visible geometry.
+
+            2. Set the Origin:
+            - Establish the origin (0.00, 0.00) at the absolute bottom-left corner of the geometry's 
+                bounding box. All extracted coordinates must be non-negative relative to this new origin.
+
+            3. Trace the Contour:
+            - Start the extraction from the lowest point on the leftmost side of the visible geometry 
+                and proceed sequentially along the contour.
+
+            4. Calculate Coordinates:
+            - Use the provided dimensional values (lengths and radii) to calculate the precise (X, Y) 
+                coordinates of each unique vertex (endpoints and tangency points) relative to the 
+                (0.00, 0.00) origin.
+
+            Output Requirements:
+            - Return a single, plain-text string containing only the extracted coordinates.
+            - Format each coordinate pair as start_x,start_y,end_x,end_y and for arcs include radius.
+            - Output must be in pure JSON format using labels L1, L2… for lines and A1, A2… for arcs.
+
+            Strict JSON Schema:
+            {
+            "views": [
+                {
+                "name": "top",
+                "entities": [
+                    {
+                    "label": "L1",
+                    "type": "LINE",
+                    "start_x": 0.0,
+                    "start_y": 0.0,
+                    "end_x": 0.0,
+                    "end_y": 29.98
+                    },
+                    {
+                    "label": "A1",
+                    "type": "ARC",
+                    "start_x": 0.0,
+                    "start_y": 0.0,
+                    "end_x": 0.0,
+                    "end_y": 37.93,
+                    "radius": 10.00
+                    }
+                ],
+                "metadata": {
+                    "units": "mm",
+                    "scale": 1
+                }
+                },
+                {
+                "name": "right",
+                "entities": [
+                    {
+                    "label": "L1",
+                    "type": "LINE",
+                    "start_x": 0.0,
+                    "start_y": 5.0,
+                    "end_x": 0.0,
+                    "end_y": 93.78
+                    },
+                    {
+                    "label": "C1",
+                    "type": "CIRCLE",
+                    "center_x": 12,
+                    "center_y": 8,
+                    "radius": 20
+                    }
+                ],
+                "metadata": {
+                    "units": "mm",
+                    "scale": 1
+                }
+                }
+            ]
+            }
+
+            Return ONLY the plain-text string of coordinates, nothing else. 
+            
+            SHAFT:
+            
+            If the image is a shaft then
+            Analyze the provided 2D mechanical CAD image of a cylindrical shaft/pin. The image contains a front view (length and outer profile) and may contain a sectional view showing hollowness or internal bores.
+                Task:
+                1) Identify the revolve axis (centerline) and state its direction (horizontal or vertical). Include the axis in the final JSON as "revolve_axis".
+                2) Extract the outer contour from the FRONT view (upper-half profile for revolve).
+                3) If a SECTION view (labelled "section", "A-A", or similar) shows internal hollowness / bores:
+                - Measure inner diameters from that section.
+                - Project those inner profiles into the FRONT view coordinate system.
+                - Add these inner profiles as separate closed loops in the SAME "front" view entities.
+                - In section view, the solid parts are hashed and the hollow part is plain white space.
+                - Use the sectional view to detect hollowness or internal features.
+                - Include internal steps, hollowness, bore transitions, arcs, and chamfers revealed in the sectional view into the extracted geometry.
+                - Ensure all added internal segments connect end-to-end in order and match the front view's axis and coordinate system.
+                5)A fillet is a rounded corner between two intersecting lines.Fillet are same as ARC. convert fillet into arc type.
+                6)A chamfer is a straight edge connecting two intersecting lines, replacing a corner with a beveled line and are represented with distance*angle(with horizontal).Represent chamfers as LINE primitives.
+                7)If hidden lines passes through entire geometry the shaft is hollow.Strictly on such condition represent them as LINE primitives.
+                    a)Section view are usually given for shafts/cylinders with internal blind or through holes.
+                8)Note:identify only mentioned primitives(LINE, CIRCLE, ARC).
+                9) Output ONLY a plain-text JSON string with coordinates in millimeters and this structure:
+                {
+                "views": [
+                {
+                    "name": "front",
+                    "entities": [
+                    { "type":"LINE", "start_x":0.0, "start_y":0.0, "end_x":0.0, "end_y":29.98 },
+                    { "type":"CIRCLE", "center_x":0.0, "center_y":0.0, "radius":16.0 }
+                    ],
+                    "metadata": {"units":"mm", "scale": 1 }
+                }
+                ],
+                "revolve_axis": {"start_x":0.0, "start_y":0.0, "end_x":100.0, "end_y":0.0 }
+                }
+                Notes:
+                - Use 'LINE' for straight segments, 'ARC' for curved arcs, 'CIRCLE' when an entire circle is present.
+                - Ensure the inner loop shares the same axis and center as the outer profile (concentric) whenever the drawing implies symmetry.
+                - Do not output any explanatory text — only the JSON.
+                - Check for symmetry if present.
+                - All linear, radial, angular, and diameter values MUST be copied EXACTLY as written
+                  in the drawing annotations.

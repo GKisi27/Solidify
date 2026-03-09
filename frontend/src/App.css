@@ -1,0 +1,13 @@
+* {
+  /* padding: 0;
+  margin: 0; */
+  box-sizing: border-box;
+}
+body {
+  background-color: #f6f6f8;
+  font-family: 'Space Grotesk', sans-serif;
+}
+/* main {
+  padding-top: 60px;
+  padding-bottom: 50px;
+} */
