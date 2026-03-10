@@ -91,7 +91,7 @@ const LandingPage = () => {
               <div className="h-89.5 w-183.5 rounded-2xl relative">
                 <img
                   src={selectedImage}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain"
                   alt="preview"
                 />
                 <div
@@ -187,7 +187,7 @@ const LandingPage = () => {
       </div>
 
       <Dialog open={processingOpen} onOpenChange={setProcessingOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg" onInteractOutside={(e) => e.preventDefault()}onEscapeKeyDown={(e) => e.preventDefault()}>
           <div className="text-center space-y-6">
             <img src="/Visual.png" alt="processing" className="mx-auto w-24" />
 
