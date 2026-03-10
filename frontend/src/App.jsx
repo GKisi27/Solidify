@@ -2,6 +2,7 @@ import "./App.css";
 import Footer from "./components/Footer/Footer";
 import FullScreen from "./components/FullScreen/FullScreen";
 import Navbar from "./components/Navbar/Navbar";
+import CostEstimation from "./pages/CostEstimation/CostEstimation";
 import LandingPage from "./pages/LandingPage/LandingPage";
 import Login from "./pages/Login/Login";
 import Result from "./pages/Result/Result";
@@ -40,6 +41,18 @@ function App() {
             </>
           }
         ></Route>
+        <Route
+        path="/cost-estimation"
+        element={
+          <>
+          <Navbar></Navbar>
+          <CostEstimation></CostEstimation>
+          <Footer></Footer>
+          </>
+        }
+        >
+          
+        </Route>
       </Routes>
     </Router>
   );
