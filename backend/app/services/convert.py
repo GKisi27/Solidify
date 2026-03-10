@@ -1635,51 +1635,55 @@ class OnshapeSession:
             )
 
     def build_shaft(
-        self,
-        features_url: str,
-        views: list[dict],
-        revolve_axis: dict | None,
+    self,
+    features_url: str,
+    views: list[dict],
+    revolve_axis: dict | None,
     ) -> None:
-        """Revolve-intersect shaft workflow."""
-        prev_fid: str | None = None
-
+        """Revolve workflow for shafts — a single profile sketch is revolved."""
+        # Find the first valid view with entities to use as the profile.
+        profile_view: dict | None = None
+        profile_idx: int = 1
         for idx, view in enumerate(views, start=1):
             view_name = view.get("name", f"view{idx}").lower()
             if view_name not in self.SUPPORTED_VIEWS:
                 continue
+            if view.get("entities"):
+                profile_view = view
+                profile_idx  = idx
+                break
 
-            entities = view.get("entities", [])
-            if not entities:
-                continue
+        if profile_view is None:
+            return
 
-            sketch_entities, last_id = build_sketch_entities(entities, return_last_id=True)
+        view_name = profile_view.get("name", f"view{profile_idx}").lower()
+        entities  = profile_view["entities"]
 
-            axis_sketch_fid, axis_entity_id, sketch_entities = self._resolve_axis(
-                features_url, view_name, idx, revolve_axis, sketch_entities, entities
-            )
-            if not axis_entity_id:
-                axis_entity_id = last_id
+        sketch_entities, last_id = build_sketch_entities(entities, return_last_id=True)
 
-            sketch_fid = self.add_sketch(
-                features_url,
-                f"Sketch {idx} ({view_name})",
-                view_name,
-                sketch_entities,
-            )
+        axis_sketch_fid, axis_entity_id, sketch_entities = self._resolve_axis(
+            features_url, view_name, profile_idx, revolve_axis, sketch_entities, entities
+        )
+        if not axis_entity_id:
+            axis_entity_id = last_id
 
-            axis_ref = axis_sketch_fid if axis_sketch_fid else sketch_fid
-            operation = "NEW" if prev_fid is None else "INTERSECT"
-            prev_fid  = self.add_revolve(
-                features_url,
-                f"Revolve {idx} ({view_name})",
-                sketch_fid,
-                axis_ref,
-                axis_entity_id,
-                operation=operation,
-            )
-            time.sleep(0.2)
+        sketch_fid = self.add_sketch(
+            features_url,
+            f"Sketch {profile_idx} ({view_name})",
+            view_name,
+            sketch_entities,
+        )
 
-
+        axis_ref = axis_sketch_fid if axis_sketch_fid else sketch_fid
+        self.add_revolve(
+            features_url,
+            f"Revolve {profile_idx} ({view_name})",
+            sketch_fid,
+            axis_ref,
+            axis_entity_id,
+            operation="NEW",
+        )
+        time.sleep(0.2)
 # ---------------------------------------------------------------------------
 # Top-level pipeline
 # ---------------------------------------------------------------------------
