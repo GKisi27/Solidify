@@ -14,7 +14,7 @@ from PIL import Image
 import google.genai as genai
 from google.genai import types
 from onshape_client.client import Client
-
+from app.services.to_db import save_image, save_json
 
 
 def load_config() -> dict:
@@ -54,27 +54,24 @@ def sanitize_name(name: str) -> str:
     """Strip unsafe characters from a filename stem."""
     return "".join(c for c in name if c.isalnum() or c in ("-", "_"))
 
-
 def make_output_paths(file_stem: str, output_dir: str | None = None) -> tuple[Path, Path]:
-    """
-    Create (empty) output JSON files and return their paths.
-
-    Returns:
-        (gemini_output_path, converted_output_path)
-    """
     file_name_only = Path(file_stem).stem
+
+    # Use environment variable first
+    data_dir = os.getenv("DATA_DIR")
 
     if output_dir:
         base = Path(output_dir)
+    elif data_dir:
+        base = Path(data_dir) / file_name_only
     else:
+        # fallback for local dev (optional)
         current_folder = Path(__file__).resolve().parent
-
         base_project_folder = current_folder
         while base_project_folder.name != "Solidify":
             if base_project_folder.parent == base_project_folder:
                 raise FileNotFoundError("Could not find 'Solidify' folder in parent hierarchy")
             base_project_folder = base_project_folder.parent
-
         base = base_project_folder / "data" / file_name_only
 
     base.mkdir(parents=True, exist_ok=True)
@@ -740,9 +737,10 @@ class OnshapeSession:
 def convert_to_3d(
     image: str | Path | bytes | BytesIO,
     file_stem: str,
+    image_bytes: bytes,
     *,
     prompt_file: str = "prompt.yml",
-    output_dir: str | None = None,
+    output_dir: str | None = None
 ) -> str:
     """
     Full pipeline: image → Gemini → JSON → Onshape 3D model.
@@ -757,6 +755,8 @@ def convert_to_3d(
         URL to the generated Onshape document.
     """
     cfg = load_config()
+    
+    save_image(image_bytes)
 
 
     gemini_client = get_gemini_client(cfg["gemini_api_key"])
@@ -768,6 +768,8 @@ def convert_to_3d(
 
     converted_json = convert_json_format(gemini_json)
     converted_path.write_text(json.dumps(converted_json, indent=2), encoding="utf-8")
+    
+    save_json(gemini_json, converted_json)
 
     session = OnshapeSession(cfg["onshape_access"], cfg["onshape_secret"], cfg["onshape_base"])
     did, wid, eid = session.create_document("CNavi Model")

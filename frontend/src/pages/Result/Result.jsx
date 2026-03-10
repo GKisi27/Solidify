@@ -5,7 +5,7 @@ import ViewInArOutlinedIcon from '@mui/icons-material/ViewInArOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-const API_BASE = 'http://localhost:8001';
+const API_BASE = 'http://localhost:8000';
 
 const card = {
 	background: '#fff',

@@ -27,20 +27,29 @@ const handleLogin = async (e) => {
 	}
 
 	try {
+		const formData = new URLSearchParams();
+		formData.append('username', username);
+		formData.append('password', password);
+
 		const response = await axios.post(
-			'http://localhost:8001/login',
-			{ username, password },
-			{ headers: { 'Content-Type': 'application/json' } }, 
+			'http://localhost:8000/login',
+			formData.toString(),
+			{
+				headers: {
+					'Content-Type': 'application/x-www-form-urlencoded',
+				},
+			},
 		);
 
-  if (response.data.success) {
-    localStorage.setItem('token', response.data.token);
-    localStorage.setItem('username', response.data.username); // ADD THIS
-    navigate('/');
-  } else {
-	setError(response.data.detail);
-}
+		if (response.data.access_token) {
+			localStorage.setItem('token', response.data.access_token);
+			localStorage.setItem('username', response.data.username);
+			navigate('/'); 
+		} else {
+			setError('Invalid credentials');
+		}
 	} catch (err) {
+		console.error(err);
 		setError('Server error. Please try again later.');
 	}
 };
