@@ -7,6 +7,8 @@ import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import Navbar from "../../components/Navbar/Navbar";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
+
 export default function Login() {
   const navigate = useNavigate();
 
@@ -15,16 +17,43 @@ export default function Login() {
   const [showpassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
 
     if (!username || !password) {
       setError("Username and password are required!");
       return;
     }
-    setError(""); //Clear Error
-    navigate("/");
+
+    try {
+      const formData = new URLSearchParams();
+      formData.append("username", username);
+      formData.append("password", password);
+      console.log(username);
+
+      const response = await axios.post(
+        "http://localhost:8000/login",
+        formData.toString(),
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        },
+      );
+
+      if (response.data.access_token) {
+        localStorage.setItem("token", response.data.access_token);
+        localStorage.setItem("username", response.data.username);
+        navigate("/");
+      } else {
+        setError("Invalid credentials");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Server error. Please try again later.");
+    }
   };
+
   return (
     <div className="Login">
       <div className="container">
