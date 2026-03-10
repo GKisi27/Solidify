@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import Money from "./Money";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -12,7 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-
+import { Link } from "react-router-dom";
 import { AiOutlineCloudUpload } from "react-icons/ai";
 import { FaWandMagicSparkles } from "react-icons/fa6";
 import { MdOutlineSpeed } from "react-icons/md";
@@ -190,7 +191,16 @@ const LandingPage = () => {
         </Card>
       </div>
 
-      <div className="flex justify-center mt-15">
+      <div className="flex justify-center gap-5 mt-15">
+        <Link to="/cost-estimation">
+        <Button
+              disabled={!selectedImage}
+              className="flex gap-2 text-white text-[18px] font-bold justify-center items-center bg-[#135BEC] hover:bg-[#135BEC] px-7 py-3 rounded-xl shadow-lg shadow-[#135BEC] w-70 h-14 cursor-pointer"
+            >
+              <Money/>
+              Cost Estimation
+            </Button>
+            </Link>
         <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
           <DialogTrigger asChild>
             <Button
