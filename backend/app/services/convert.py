@@ -16,13 +16,7 @@ from google.genai import types
 from onshape_client.client import Client
 from app.services.to_db import save_image, save_json
 
-
-# ---------------------------------------------------------------------------
-# Configuration & I/O helpers
-# ---------------------------------------------------------------------------
-
 def load_config() -> dict:
-    """Load environment variables and return a config dict."""
     load_dotenv()
 
     config = {
@@ -41,7 +35,7 @@ def load_config() -> dict:
 
 
 def load_prompt(prompt_file: str = "prompt.yml") -> str:
-    """Load the Gemini prompt from a YAML file."""
+    
     base_dir = Path(__file__).resolve().parent
     full_path = base_dir / prompt_file
 
@@ -84,11 +78,6 @@ def make_output_paths(file_stem: str, output_dir: str | None = None) -> tuple[Pa
 
     return gemini_path, converted_path
 
-
-# ---------------------------------------------------------------------------
-# Image helpers
-# ---------------------------------------------------------------------------
-
 def prepare_image(image: Image.Image) -> Image.Image:
     """Ensure the image is in RGB mode, converting if necessary."""
     if image.mode not in ("RGB", "RGBA"):
@@ -105,14 +94,11 @@ def open_image(source: str | Path | bytes | BytesIO) -> Image.Image:
     return Image.open(source)
 
 
-# ---------------------------------------------------------------------------
-# Gemini client
-# ---------------------------------------------------------------------------
-
 def get_gemini_client(api_key: str) -> genai.Client:
     """Instantiate and return a Gemini client."""
     return genai.Client(api_key=api_key)
 
+# Gemini 3.1 or gemini 3?? (test going on)
 
 def call_gemini(
     image: Image.Image,
@@ -141,11 +127,6 @@ def call_gemini(
         return json.loads(response.text)
     except json.JSONDecodeError as exc:
         raise ValueError(f"Gemini returned non-JSON response: {exc}") from exc
-
-
-# ---------------------------------------------------------------------------
-# Geometry helpers
-# ---------------------------------------------------------------------------
 
 def _unit_vector(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Return the unit direction vector from point *a* to point *b*."""
@@ -217,10 +198,7 @@ def _normalize_cw_angles(start: float, end: float) -> tuple[float, float]:
         end += 360
     return start, end
 
-
-# ---------------------------------------------------------------------------
-# JSON conversion: Gemini output → Onshape-ready format
-# ---------------------------------------------------------------------------
+#LLM generated json lai OnShape ko format ma lagna 
 
 def _intermediate_entity(raw: dict) -> dict:
     """Convert a raw Gemini entity into a normalised intermediate dict."""
@@ -370,7 +348,6 @@ def _extract_shaft_section_entities(section_view: dict) -> list[dict]:
             })
         elif t == "ARC":
             # Represent as a full circle so the revolve produces a complete
-            # inner bore rather than a partial feature.
             result.append({
                 "type":        "ARC",
                 "center_x":    0.0,
@@ -472,11 +449,6 @@ def convert_json_format(gemini_json: dict) -> dict:
 
     return output
 
-
-# ---------------------------------------------------------------------------
-# Onshape sketch-entity builders
-# ---------------------------------------------------------------------------
-
 _MM_TO_M = 1 / 1000
 
 
@@ -573,11 +545,6 @@ def build_sketch_entities(
 
     return (sketch_entities, last_id) if return_last_id else sketch_entities
 
-
-# ---------------------------------------------------------------------------
-# Onshape session
-# ---------------------------------------------------------------------------
-
 class OnshapeSession:
     """Thin wrapper around the Onshape REST API for this converter."""
 
@@ -622,9 +589,7 @@ class OnshapeSession:
     def features_url(self, did: str, wid: str, eid: str) -> str:
         return f"{self.base}/api/v7/partstudios/d/{did}/w/{wid}/e/{eid}/features"
 
-    # ------------------------------------------------------------------
-    # Payload builders
-    # ------------------------------------------------------------------
+    # Payloads  (OnShape ma sketch, other bodies banauna)
 
     def _sketch_payload(
         self,
@@ -733,10 +698,6 @@ class OnshapeSession:
                 ],
             },
         }
-
-    # ------------------------------------------------------------------
-    # Feature posting helpers
-    # ------------------------------------------------------------------
 
     def add_sketch(
         self, url: str, name: str, view_name: str, sketch_entities: list[dict]
@@ -850,9 +811,6 @@ class OnshapeSession:
 
         return axis_sketch_fid, axis_entity_id, sketch_entities
 
-    # ------------------------------------------------------------------
-    # High-level build workflows
-    # ------------------------------------------------------------------
 
     def build_plate(self, features_url: str, views: list[dict]) -> None:
         """Extrude-intersect plate workflow."""
@@ -938,9 +896,8 @@ class OnshapeSession:
                 operation=operation,
             )
             time.sleep(0.2)
-# ---------------------------------------------------------------------------
-# Top-level pipeline
-# ---------------------------------------------------------------------------
+            
+# This pipeline is used to convert 2D images to 3D models in OnShape
 
 def convert_to_3d(
     image: str | Path | bytes | BytesIO,
