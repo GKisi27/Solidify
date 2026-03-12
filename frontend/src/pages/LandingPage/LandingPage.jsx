@@ -22,6 +22,8 @@ import { TbStack } from "react-icons/tb";
 const API_BASE = "http://localhost:8000";
 
 const LandingPage = () => {
+  const abortControllerRef = useRef(null);
+
   const navigate = useNavigate();
   const inputRef = useRef(null);
 
@@ -58,42 +60,26 @@ const LandingPage = () => {
     setProcessingOpen(true);
     setProgress(0);
     setError(null);
+    abortControllerRef.current = new AbortController();
 
     try {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("You must be logged in to upload.");
 
-      // Step 1: Upload
       const formData = new FormData();
       formData.append("file", selectedFile);
 
-      setProgress(20);
-      const uploadRes = await fetch(`${API_BASE}/upload`, {
-        method: "POST",
-        body: formData,
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!uploadRes.ok) {
-        const errData = await uploadRes.json();
-        throw new Error(errData.detail || "Upload failed");
-      }
-
-      const { image_id } = await uploadRes.json();
-      setProgress(40);
-
-      // Step 2: Convert
+      // Animate progress while waiting for /convert
       const progressInterval = setInterval(() => {
         setProgress((prev) => (prev < 90 ? prev + 5 : prev));
       }, 400);
 
-      const convertRes = await fetch(
-        `${API_BASE}/convert?image_id=${image_id}`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+      const convertRes = await fetch(`${API_BASE}/convert`, {
+        method: "POST",
+        body: formData,
+        headers: { Authorization: `Bearer ${token}` },
+        signal: abortControllerRef.current.signal,
+      });
 
       clearInterval(progressInterval);
 
@@ -102,19 +88,42 @@ const LandingPage = () => {
         throw new Error(errData.detail || "Conversion failed");
       }
 
-      const convertData = await convertRes.json();
+      const result = await convertRes.json();
+
+      // Backend returns "Cancelled" message if client disconnected mid-way
+      if (
+        result.message === "Cancelled" ||
+        result.message === "Cancelled mid-processing"
+      ) {
+        throw new Error("Conversion was cancelled.");
+      }
+
       setProgress(100);
 
       setTimeout(() => {
         setProcessingOpen(false);
         navigate("/results", {
-          state: { imageId: convertData.image_id },
+          state: {
+            convertedImage: result.converted_image,
+            docUrl: result.doc_url,
+            geminiJson: result.gemini_json,
+            convertedJson: result.converted_json,
+          },
         });
       }, 800);
     } catch (err) {
+      if (err.name === "AbortError") {
+        console.log("Request was aborted");
+        return;
+      }
       setError(err.message || "Something went wrong");
       setProgress(0);
     }
+  };
+
+  const handleCancelProcessing = () => {
+    setProcessingOpen(false);
+    if (abortControllerRef.current) abortControllerRef.current.abort();
   };
 
   return (
@@ -277,7 +286,7 @@ const LandingPage = () => {
 
                 <Button
                   className="bg-[#135BEC] text-white px-4 py-2 rounded-lg text-[14px] mt-6 cursor-pointer"
-                  onClick={() => setProcessingOpen(false)}
+                  onClick={handleCancelProcessing}
                 >
                   Cancel Processing
                 </Button>

@@ -1,11 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
+import React from "react";
 import ArchitectureOutlinedIcon from "@mui/icons-material/ArchitectureOutlined";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import ViewInArOutlinedIcon from "@mui/icons-material/ViewInArOutlined";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import { useLocation, useNavigate } from "react-router-dom";
-
-const API_BASE = "http://localhost:8000";
 
 const card = {
   background: "#fff",
@@ -24,49 +22,16 @@ const cardHeader = {
 };
 
 export default function Result() {
-  //   const abortControllerRef = useRef(null);
   const { state } = useLocation();
   const navigate = useNavigate();
-  const pollRef = useRef(null);
-  const imageId = state?.imageId;
 
-  const [convertedImage, setConvertedImage] = useState(null);
-  const [docUrl, setDocUrl] = useState(null);
-  const [geminiJson, setGeminiJson] = useState(null);
-  const [convertedJson, setConvertedJson] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  if (!state) {
+    navigate("/", { replace: true });
+    return null;
+  }
 
-  const fetchResults = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/results/${imageId}`);
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
-      const data = await res.json();
-      if (data.status === "pending") {
-        pollRef.current = setTimeout(fetchResults, 5000);
-        return;
-      }
-      setConvertedImage(data.converted_image);
-      setDocUrl(data.doc_url);
-      setGeminiJson(data.gemini_json);
-      setConvertedJson(data.converted_json);
-      setLoading(false);
-    } catch (err) {
-      setError(err.message || "Failed to fetch results.");
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!imageId) {
-      navigate("/", { replace: true });
-      return;
-    }
-    fetchResults();
-    return () => {
-      if (pollRef.current) clearTimeout(pollRef.current);
-    };
-  }, [imageId]);
+  // Fields mapped from /results/ API response (snake_case → camelCase in LandingPage)
+  const { convertedImage, docUrl, geminiJson, convertedJson } = state;
 
   const downloadJson = (data, filename) => {
     const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -80,69 +45,6 @@ export default function Result() {
     URL.revokeObjectURL(url);
   };
 
-  /* ── Loading ── */
-  if (loading)
-    return (
-      <div
-        style={{
-          minHeight: "80vh",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "16px",
-          background: "#F9FAFB",
-        }}
-      >
-        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-        <div
-          style={{
-            width: "40px",
-            height: "40px",
-            border: "4px solid #E5E7EB",
-            borderTop: "4px solid #135BEC",
-            borderRadius: "50%",
-            animation: "spin 0.8s linear infinite",
-          }}
-        />
-        <p style={{ color: "#6B7280", fontSize: "14px", margin: 0 }}>
-          Conversion in progress… Please wait.
-        </p>
-      </div>
-    );
-
-  /* ── Error ── */
-  if (error)
-    return (
-      <div
-        style={{
-          minHeight: "80vh",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "12px",
-        }}
-      >
-        <p style={{ color: "#EF4444", fontSize: "14px" }}>{error}</p>
-        <button
-          onClick={() => navigate("/")}
-          style={{
-            background: "#135BEC",
-            color: "#fff",
-            border: "none",
-            borderRadius: "8px",
-            padding: "8px 20px",
-            cursor: "pointer",
-            fontSize: "14px",
-          }}
-        >
-          Go Back
-        </button>
-      </div>
-    );
-
-  /* ── Results ── */
   return (
     <div
       style={{
@@ -152,7 +54,7 @@ export default function Result() {
         boxSizing: "border-box",
       }}
     >
-      {/* ── Page header ── */}
+      {/* Page header */}
       <div
         style={{
           display: "flex",
@@ -172,24 +74,12 @@ export default function Result() {
           >
             Conversion Results
           </h2>
-          <p
-            style={{
-              margin: "4px 0 0",
-              fontSize: "13px",
-              color: "#6B7280",
-            }}
-          >
+          <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#6B7280" }}>
             Observe and check your input image and the conversion.
           </p>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            alignItems: "center",
-          }}
-        >
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <button
             onClick={() => navigate("/")}
             style={{
@@ -228,7 +118,7 @@ export default function Result() {
         </div>
       </div>
 
-      {/* ── Main grid: 55% image | 45% JSON stack ── */}
+      {/* Main grid: 55% image | 45% JSON stack */}
       <div
         style={{
           display: "grid",
@@ -237,18 +127,14 @@ export default function Result() {
           alignItems: "start",
         }}
       >
-        {/* LEFT — 3D image */}
+        {/* LEFT — converted image (base64 from backend) */}
         <div style={card}>
           <div style={cardHeader}>
             <ViewInArOutlinedIcon
               style={{ color: "#135BEC", fontSize: "18px" }}
             />
             <span
-              style={{
-                fontWeight: 600,
-                fontSize: "13px",
-                color: "#0D121B",
-              }}
+              style={{ fontWeight: 600, fontSize: "13px", color: "#0D121B" }}
             >
               Onshape 3D
             </span>
@@ -283,33 +169,15 @@ export default function Result() {
         </div>
 
         {/* RIGHT — two JSON panels stacked */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "16px",
-          }}
-        >
-          {/* Base Mesh JSON */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {/* Base Mesh JSON (gemini_json from backend) */}
           <div style={card}>
-            <div
-              style={{
-                ...cardHeader,
-                justifyContent: "space-between",
-              }}
-            >
+            <div style={{ ...cardHeader, justifyContent: "space-between" }}>
               <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
+                style={{ display: "flex", alignItems: "center", gap: "8px" }}
               >
                 <DescriptionOutlinedIcon
-                  style={{
-                    color: "#135BEC",
-                    fontSize: "18px",
-                  }}
+                  style={{ color: "#135BEC", fontSize: "18px" }}
                 />
                 <span
                   style={{
@@ -374,26 +242,14 @@ export default function Result() {
             )}
           </div>
 
-          {/* Onshape Compatible JSON */}
+          {/* Onshape Compatible JSON (converted_json from backend) */}
           <div style={card}>
-            <div
-              style={{
-                ...cardHeader,
-                justifyContent: "space-between",
-              }}
-            >
+            <div style={{ ...cardHeader, justifyContent: "space-between" }}>
               <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
+                style={{ display: "flex", alignItems: "center", gap: "8px" }}
               >
                 <ArchitectureOutlinedIcon
-                  style={{
-                    color: "#135BEC",
-                    fontSize: "18px",
-                  }}
+                  style={{ color: "#135BEC", fontSize: "18px" }}
                 />
                 <span
                   style={{

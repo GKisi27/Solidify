@@ -1,9 +1,11 @@
 import "./App.css";
+import { useEffect } from "react";
 import Footer from "./components/Footer/Footer";
 import Navbar from "./components/Navbar/Navbar";
 import LandingPage from "./pages/LandingPage/LandingPage";
 import Login from "./pages/Login/Login";
 import Result from "./pages/Result/Result";
+import { isTokenExpired } from "./auth";
 import {
   BrowserRouter as Router,
   Routes,
@@ -13,7 +15,7 @@ import {
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
-  if (!token) return <Navigate to="/login" replace />;
+  if (!token || isTokenExpired(token)) return <Navigate to="/login" replace />;
   return children;
 }
 
