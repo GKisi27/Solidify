@@ -32,7 +32,7 @@ export default function Login() {
       console.log(username);
 
       const response = await axios.post(
-        "http://localhost:8000/login",
+        "http://localhost:8000/auth/login",
         formData.toString(),
         {
           headers: {
