@@ -10,7 +10,7 @@
   background-color: #ffffff;
   padding: 20px 40px;
   font-family: "SpaceGrotesk";
-
+  z-index: 100;
   .left {
     display: flex;
     align-items: center;
@@ -20,7 +20,7 @@
 
     span {
       font-size: 20px;
-      line-height: 25;
+      line-height: 25px;
       letter-spacing: -0.3px;
       font-weight: bold;
     }

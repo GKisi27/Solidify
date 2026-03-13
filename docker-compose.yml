@@ -1,20 +1,23 @@
-version: '3.9'
-
 services:
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: fastapi_app
+    container_name: backend
     ports:
       - "8000:8000"
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      qdrant:
+        condition: service_started
     environment:
       DATABASE_URL: postgresql://postgres:1@postgres:5432/mydb
       REDIS_HOST: redis
       DATA_DIR: /solidify/data
+      QDRANT_URL: http://qdrant_vector_db:6333
     volumes:
       - ./backend:/app
       - ./data:/solidify/data
@@ -22,12 +25,17 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-    container_name: react_app
+      dockerfile: Dockerfile.dev
+    container_name: frontendd
     ports:
-      - "3001:80"
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
       - backend
+    environment:
+      - CHOKIDAR_USEPOLLING=true
 
   postgres:
     image: postgres:15.5
@@ -37,15 +45,29 @@ services:
       POSTGRES_PASSWORD: 1
       POSTGRES_DB: mydb
     ports:
-      - "5434:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7
     container_name: redis_cache
     ports:
-      - "6381:6379"
+      - "6379:6379"
+
+  qdrant:
+    image: qdrant/qdrant:v1.13.0
+    container_name: qdrant_vector_db
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
 
 volumes:
   postgres_data:
+  qdrant_storage:

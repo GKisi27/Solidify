@@ -1,4 +1,4 @@
-
+    
 import json
 
 def get_json(gemini_path, converted_path):

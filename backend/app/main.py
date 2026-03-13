@@ -1,15 +1,36 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import router
+from app.api.router import api_router
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=["http://localhost:3000","http://127.0.0.1:3000", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(router)
+# Include all API routers
+app.include_router(api_router)
+
+@app.on_event("startup")
+def startup_event():
+    from app.services.cost_estimator import _ensure_kb
+    from app.core.database import Base, engine
+    # Create database tables if not exist
+    Base.metadata.create_all(bind=engine)
+    # Initialize knowledge base or other services
+    _ensure_kb()
+    print("✅ API ready")
+
+@app.get("/")
+def root():
+    return {
+        "message": "2D CAD Cost Estimator API is running",
+        "docs": "/docs",
+        "health": "/health",
+        "materials": "/materials",
+        "estimate": "POST /estimate"
+    }

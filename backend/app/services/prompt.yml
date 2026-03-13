@@ -3,93 +3,122 @@ prompt: |
                 
             PLATE:
             
-            The image contains a contour defined by a sequence of lines, arcs, and circles, along with associated 
-            dimensions (lengths and radii). Your task is to accurately extract the coordinates of all unique 
-            vertices, which include the endpoints of straight line segments and the tangency points of arc segments, 
-            that define the main visible geometry's contour. Do NOT take dimensions and extension lines as part of 
-            the geometry. 
-
-            Steps for Coordinate Extraction:
-
-            1. Determine the Bounding Box:
-            - Calculate the absolute minimum X and minimum Y values for the entire visible geometry.
-
-            2. Set the Origin:
-            - Establish the origin (0.00, 0.00) at the absolute bottom-left corner of the geometry's 
-                bounding box. All extracted coordinates must be non-negative relative to this new origin.
-
-            3. Trace the Contour:
-            - Start the extraction from the lowest point on the leftmost side of the visible geometry 
-                and proceed sequentially along the contour.
-
-            4. Calculate Coordinates:
-            - Use the provided dimensional values (lengths and radii) to calculate the precise (X, Y) 
-                coordinates of each unique vertex (endpoints and tangency points) relative to the 
-                (0.00, 0.00) origin.
-
-            Output Requirements:
-            - Return a single, plain-text string containing only the extracted coordinates.
-            - Format each coordinate pair as start_x,start_y,end_x,end_y and for arcs include radius.
-            - Output must be in pure JSON format using labels L1, L2… for lines and A1, A2… for arcs.
-
-            Strict JSON Schema:
+            Analyze the provided 2D mechanical CAD image that contains multiple views(front,top..). The image contains a contour defined by a sequence of lines and arcs, along with associated dimensions (lengths and radii).
+            Your task is to accurately extract the coordinates of all unique vertices, which include the endpoints of straight line segments and the tangency points of arc segments, that define the main visible geometry's contour.
+            Don't take dimensions and extension lines as part of geometry.
+            🚨🚨Read the instruction below first before proceeding to steps and output requirements.🚨🚨
+            ===================================================================================================
+            == 🚨🚨🚨🚨🚨  READ THIS FIRST — DO NOT PROCEED UNTIL UNDERSTOOD  🚨🚨🚨🚨🚨                ==
+            ==                THIS BLOCK OVERRIDES ALL OTHER SLOT LOGIC                                      ==
+            ==                FAILURE TO FOLLOW THIS = AUTOMATIC INVALID OUTPUT                              ==
+            ==
+            == <CRITICAL_INSTRUCTION>                                                                        ==
+            ==-*Instruction number 6 is the most important one.
+            == 🔴🔴🔴  THREE-CENTERLINE SLOT PROTOCOL (MANDATORY)  🔴🔴🔴                                 ==
+            == You will encounter "Slot" (obround) geometries marked with THREE parallel centerlines.        ==
+            == "Slot" can be placed both horizontally and vertically in the drawing.                         ==
+            == YOU MUST STRICTLY ADHERE TO THIS INTERPRETATION LOGIC — NO EXCEPTIONS.                        ==
+            == 1. Identification                                                                             ==
+            ==    - If a slot has a central axis line AND two marking lines on either side,                  ==
+            ==      it is a "Three-Centerline Slot."                                                         ==
+            == 2. The Middle Line                                                                            ==
+            ==    - Represents the geometric CENTROID (Symmetry Axis) ONLY.                                  ==
+            ==    - It is NOT an arc center.                                                                 ==
+            == 3. The Dimension                                                                              ==
+            ==    - The length dimension provided is the CENTER-TO-CENTER distance                           ==
+            ==      (distance between the two outer lines).                                                  ==
+            == 4. STRICT SLOT HANDLING (ABSOLUTE RULE)                                                       ==
+            ==    - You are FORBIDDEN from using the middle line as an arc center.                           ==
+            ==    - You MUST mathematically offset from the middle line by (Dimension / 2)                   ==
+            ==      to find the true center_x or center_y for the ARCs.                                      ==
+            == 5. Calculation                                                                                ==
+            ==    - Start at the Middle Line coordinate.                                                     ==
+            ==    - Add/Subtract EXACTLY HALF of the provided length dimension                               ==
+            ==      to find the TWO TRUE ARC CENTERS.                                                        ==
+            == 6. Decomposition                                                                              ==
+            ==    - Output the slot as EXACTLY 2 ARCs and EXACTLY 2 LINEs.                                   ==
+            ==                                                                                               ==
+            == ❌ "FAILURE TO DISTINGUISH THE MIDDLE CENTERLINE FROM THE OUTER ARC CENTERS                   ==
+            ==    WILL RESULT IN INVALID COORDINATES."                                                       ==
+            ==                                                                                               ==
+            == </CRITICAL_INSTRUCTION>                                                                       ==
+            +-----------------------------------------------------------------------------------------------+
+            |   STEPS FOR COORDINATE EXTRACTION                                                             |
+            +-----------------------------------------------------------------------------------------------+
+            |                                                                                               |
+            | 1) Determine the Bounding Box                                                                 |
+            |    - Calculate the absolute minimum X and minimum Y values for the entire visible geometry.   |
+            |                                                                                               |
+            | 2) Set the Origin                                                                             |
+            |    - Establish the origin (0.00, 0.00) at the absolute bottom-left corner of the geometry's   |
+            |      bounding box. All extracted coordinates must be non-negative relative to this new origin.|
+            |                                                                                               |
+            | 3) Trace the Contour                                                                          |
+            |    - Start the extraction from the lowest point on the leftmost side of the visible geometry  |
+            |      and proceed sequentially along the contour.                                              |
+            |                                                                                               |
+            | 4) Calculate Coordinates                                                                      |
+            |    - Use the provided dimensional values (lengths and radii) to calculate the precise         |
+            |      (X, Y) coordinates of each unique vertex (endpoints and tangency points)                 |
+            |      relative to the (0.00, 0.00) origin.                                                     |
+            |                                                                                               |
+            +-----------------------------------------------------------------------------------------------+
+            OUTPUT REQUIREMENTS
+            Return a single, plain text string containing only the extracted coordinates.
+            Strict adherence to the schema: ...
+            SCHEMA
             {
             "views": [
-                {
-                "name": "top",
-                "entities": [
-                    {
-                    "label": "L1",
-                    "type": "LINE",
-                    "start_x": 0.0,
-                    "start_y": 0.0,
-                    "end_x": 0.0,
-                    "end_y": 29.98
-                    },
-                    {
-                    "label": "A1",
-                    "type": "ARC",
-                    "start_x": 0.0,
-                    "start_y": 0.0,
-                    "end_x": 0.0,
-                    "end_y": 37.93,
-                    "radius": 10.00
-                    }
-                ],
-                "metadata": {
-                    "units": "mm",
-                    "scale": 1
-                }
-                },
-                {
-                "name": "right",
-                "entities": [
-                    {
-                    "label": "L1",
-                    "type": "LINE",
-                    "start_x": 0.0,
-                    "start_y": 5.0,
-                    "end_x": 0.0,
-                    "end_y": 93.78
-                    },
-                    {
-                    "label": "C1",
-                    "type": "CIRCLE",
-                    "center_x": 12,
-                    "center_y": 8,
-                    "radius": 20
-                    }
-                ],
-                "metadata": {
-                    "units": "mm",
-                    "scale": 1
-                }
-                }
-            ]
+            {
+            "name": "front",
+            "entities": [ ... ]
+            },
+            {
+            "name": "right",
+            "entities": [ ... ]
             }
-
-            Return ONLY the plain-text string of coordinates, nothing else. 
-            
+            ],
+            "metadata": { "units": "mm", "scale": 1 }
+            }
+            +=================================================================================================+
+            | RULES (MANDATORY COMPLIANCE)                                                                    |
+            +=================================================================================================+
+            | 1. entities array must contain objects of type: LINE, ARC, CIRCLE.                              |
+            |    - LINE → start_x, start_y, end_x, end_y.                                                     |
+            |    - ARC → center_x, center_y, radius, start_x, end_x, start_y, end_y, clockwise.               |
+            |    - CIRCLE → center_x, center_y, radius.                                                       |
+            |                                                                                                 |
+            | 2. Don't include hidden / construction lines in entities (only for reference dimensions).       |
+            |                                                                                                 |
+            | 3. metadata must always include "units": "mm" and "scale": 1.                                   |
+            |                                                                                                 |
+            | 4. All numeric values must be numbers (no strings).                                             |
+            |                                                                                                 |
+            | 5. Include all entities visible in the drawing. Do not omit any.                                |
+            |                                                                                                 |
+            | 6. Preserve at least 3 decimal places for precision.                                            |
+            |                                                                                                 |
+            | 7. No text or explanation — return only valid JSON following this pattern exactly.              |
+            |                                                                                                 |
+            | 8. Fillet are same as ARC. Convert fillet into arc type.                                        |
+            |    Note: identify only mentioned primitives (LINE, CIRCLE, ARC).                                |
+            |                                                                                                 |
+            | 9. See the bigger picture (whole) in drawing (do not focus on other boundary only).             |
+            |                                                                                                 |
+            | 10. For entities of each view make a separate reference point to start entities from.           |
+            |                                                                                                 |
+            | 11. Deduce the missing dimensions for one view by inferring to other that have a known          |
+            |     dimension.                                                                                  |
+            |                                                                                                 |
+            | 12. Views name must only be front or right or top — nothing else.                               |
+            |                                                                                                 |
+            | 13. Read views name from the drawing if provided.                                               |
+            |                                                                                                 |
+            +=================================================================================================+
+            FINAL RESPONSE FORMAT
+            Return ONLY the plain text string of coordinates, nothing else.
+            Before providing your final answer, start your response with the word 'CHECK:' followed by a confirmation that you have met the critical requirement of [CRITICAL_INSTRUCTION]. Then provide the answer.
+                        
             SHAFT:
             
             If the image is a shaft then
