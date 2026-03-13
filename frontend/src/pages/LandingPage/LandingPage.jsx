@@ -161,6 +161,19 @@ const LandingPage = () => {
 		}
 	};
 
+	// return (
+	// 	<>
+	// 		<div className='flex flex-col items-center mt-20'>
+	// 			<h1 className='font-bold text-[40px]'>
+	// 				Convert your images to 3D images
+	// 			</h1>
+	// 			<p className='text-[18px] text-[#0D121B] text-center mt-2'>
+	// 				Transform raster images into JSON for seamless Onshape
+	// 				Integration. Design
+	// 				<br />
+	// 				faster with automatic vectorization.
+	// 			</p>
+	// 		</div>
 	return (
 		<>
 			<div className='flex flex-col items-center mt-20'>
@@ -236,6 +249,27 @@ const LandingPage = () => {
 					</CardContent>
 				</Card>
 			</div>
+			{/* <div>
+								<input
+									type='file'
+									ref={inputRef}
+									accept='image/*'
+									className='hidden'
+									onChange={(e) => {
+										const file = e.target.files[0];
+										if (file) {
+											setSelectedFile(file);
+											setSelectedImage(
+												URL.createObjectURL(file),
+											);
+										}
+									}}
+								/>
+							</div>
+						)}
+					</CardContent>
+				</Card>
+			</div> */}
 
 			<div className='flex justify-center gap-5 mt-15'>
 				{/* Cost Estimation — uploads first, then navigates with image_id */}
@@ -284,6 +318,30 @@ const LandingPage = () => {
 					</DialogContent>
 				</Dialog>
 			</div>
+					{/* <DialogContent className='bg-white'>
+						<DialogHeader>
+							<DialogTitle>Confirmation</DialogTitle>
+						</DialogHeader>
+						<DialogDescription className='text-xl mt-4'>
+							Are you sure you want to convert this image?
+						</DialogDescription>
+						<DialogFooter>
+							<Button
+								variant='outline'
+								onClick={() => setConfirmOpen(false)}
+							>
+								Cancel
+							</Button>
+							<Button
+								className='bg-[#135BEC] text-white'
+								onClick={handleProceed}
+							>
+								Proceed
+							</Button>
+						</DialogFooter>
+					</DialogContent> */}
+				{/* </Dialog> */}
+			{/* </div> */}
 
 			<Dialog open={processingOpen} onOpenChange={setProcessingOpen}>
 				<DialogContent

@@ -23,13 +23,19 @@ services:
       - ./data:/solidify/data
 
   frontend:
-    image: node:20-alpine
-    working_dir: /app
-    volumes:
-      - ./frontend:/app
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: frontendd
     ports:
       - "5173:5173"
-    command: sh -c "npm install && npm run dev -- --host"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    environment:
+      - CHOKIDAR_USEPOLLING=true
 
   postgres:
     image: postgres:15.5
