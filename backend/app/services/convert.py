@@ -735,9 +735,11 @@ def convert_to_3d(
     image: str | Path | bytes | BytesIO,
     file_stem: str,
     image_bytes: bytes,
+    stop_event = None,
     *,
     prompt_file: str = "prompt.yml",
-    output_dir: str | None = None
+    output_dir: str | None = None,
+    
 ) -> str:
     """
     Full pipeline: image → Gemini → JSON → Onshape 3D model.
@@ -751,15 +753,19 @@ def convert_to_3d(
     Returns:
         URL to the generated Onshape document.
     """
-    cfg = load_config()
+    def cancelled():
+        """Returns True if the client cancelled the request"""
+        return stop_event is not None and stop_event.is_set()
     
+    cfg = load_config()
     save_image(image_bytes)
-
-
+    if cancelled():
+        return None
     gemini_client = get_gemini_client(cfg["gemini_api_key"])
     prompt = load_prompt(prompt_file)
     gemini_json = call_gemini(image, prompt, gemini_client, model=cfg["gemini_model"])
-
+    if cancelled():
+        return None
     gemini_path, converted_path = make_output_paths(file_stem, output_dir)
     gemini_path.write_text(json.dumps(gemini_json, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -767,11 +773,13 @@ def convert_to_3d(
     converted_path.write_text(json.dumps(converted_json, indent=2), encoding="utf-8")
     
     save_json(gemini_json, converted_json)
-
+    if cancelled():
+        return None
     session = OnshapeSession(cfg["onshape_access"], cfg["onshape_secret"], cfg["onshape_base"])
-    did, wid, eid = session.create_document("CNavi Model")
+    did, wid, eid = session.create_document("3D UI")
     features_url = session.features_url(did, wid, eid)
-
+    if cancelled():
+        return None
     is_shaft = "revolve_axis" in converted_json
     revolve_axis = converted_json.get("revolve_axis")
     views = converted_json.get("views", [])
