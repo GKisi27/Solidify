@@ -3,8 +3,10 @@ import { useEffect } from "react";
 import Footer from "./components/Footer/Footer";
 import Navbar from "./components/Navbar/Navbar";
 import LandingPage from "./pages/LandingPage/LandingPage";
+import CostEstimation from "./pages/CostEstimation/CostEstimation";
 import Login from "./pages/Login/Login";
 import Result from "./pages/Result/Result";
+import EstimateResults from "./pages/Estimateresult/estimate_result";
 import { isTokenExpired } from "./auth";
 import {
   BrowserRouter as Router,
@@ -23,41 +25,55 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/* Public route */}
         <Route
           path="/login"
           element={
             <>
-              <Login />
-              <Footer />
+              <Login></Login>
+              <Footer></Footer>
             </>
           }
-        />
-
-        {/* Protected routes */}
+        ></Route>
         <Route
           path="/"
           element={
-            <ProtectedRoute>
-              <Navbar />
-              <LandingPage />
-              <Footer />
-            </ProtectedRoute>
+            <>
+              <Navbar></Navbar>
+              <LandingPage></LandingPage>
+              <Footer></Footer>
+            </>
           }
-        />
+        ></Route>
         <Route
           path="/results"
           element={
-            <ProtectedRoute>
-              <Navbar />
-              <Result />
-              <Footer />
-            </ProtectedRoute>
+            <>
+              <Navbar></Navbar>
+              <Result></Result>
+              <Footer></Footer>
+            </>
           }
-        />
-
-        {/* Catch-all → redirect everything else to login */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        ></Route>
+        <Route
+          path="/cost-estimation"
+          element={
+            <>
+              <Navbar></Navbar>
+              <CostEstimation></CostEstimation>
+              <Footer></Footer>
+            </>
+          }
+        ></Route>
+        <Route
+          path="/estimate-results"
+          element={
+            <>
+              <Navbar></Navbar>
+              <EstimateResults></EstimateResults>
+              <Footer></Footer>
+            </>
+          }
+        ></Route>
       </Routes>
     </Router>
   );

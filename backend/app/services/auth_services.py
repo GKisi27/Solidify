@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.models.user import User
 
-SECRET_KEY = "Solidify"  # use .env in production
+SECRET_KEY = "Solidify" 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 1
 

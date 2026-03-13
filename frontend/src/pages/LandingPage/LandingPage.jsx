@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import Money from "./Money";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -12,20 +13,20 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-
 import { AiOutlineCloudUpload } from "react-icons/ai";
 import { FaWandMagicSparkles } from "react-icons/fa6";
 import { MdOutlineSpeed } from "react-icons/md";
 import { RxCountdownTimer } from "react-icons/rx";
 import { TbStack } from "react-icons/tb";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = "http://localhost:8000/files";
 
 const LandingPage = () => {
-  const abortControllerRef = useRef(null);
-
   const navigate = useNavigate();
   const inputRef = useRef(null);
+
+  // ✅ Abort controller added
+  const abortControllerRef = useRef(null);
 
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -33,6 +34,7 @@ const LandingPage = () => {
   const [processingOpen, setProcessingOpen] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
+  const [processingMode, setProcessingMode] = useState(null);
 
   const features = [
     {
@@ -55,12 +57,33 @@ const LandingPage = () => {
     },
   ];
 
-  const handleProceed = async () => {
-    setConfirmOpen(false);
+  const handleCostEstimation = async () => {
+    if (!selectedFile) return;
+    setProcessingMode("estimate");
     setProcessingOpen(true);
     setProgress(0);
     setError(null);
-    abortControllerRef.current = new AbortController();
+
+    try {
+      setProgress(100);
+      setTimeout(() => {
+        setProcessingOpen(false);
+        navigate("/cost-estimation", {
+          state: { file: selectedFile },
+        });
+      }, 500);
+    } catch (err) {
+      setError(err.message || "Something went wrong");
+      setProgress(0);
+    }
+  };
+
+  const handleProceed = async () => {
+    setConfirmOpen(false);
+    setProcessingMode("convert");
+    setProcessingOpen(true);
+    setProgress(0);
+    setError(null);
 
     try {
       const token = localStorage.getItem("token");
@@ -69,16 +92,20 @@ const LandingPage = () => {
       const formData = new FormData();
       formData.append("file", selectedFile);
 
-      // Animate progress while waiting for /convert
+      setProgress(20);
+
+      // ✅ create abort controller
+      abortControllerRef.current = new AbortController();
+
       const progressInterval = setInterval(() => {
-        setProgress((prev) => (prev < 90 ? prev + 5 : prev));
+        setProgress((prev) => (prev < 85 ? prev + 5 : prev));
       }, 400);
 
       const convertRes = await fetch(`${API_BASE}/convert`, {
         method: "POST",
         body: formData,
         headers: { Authorization: `Bearer ${token}` },
-        signal: abortControllerRef.current.signal,
+        signal: abortControllerRef.current.signal, // ✅ signal added
       });
 
       clearInterval(progressInterval);
@@ -88,14 +115,25 @@ const LandingPage = () => {
         throw new Error(errData.detail || "Conversion failed");
       }
 
-      const result = await convertRes.json();
+      const convertData = await convertRes.json();
+      const fileName = convertData.file;
+      setProgress(90);
 
-      // Backend returns "Cancelled" message if client disconnected mid-way
-      if (
-        result.message === "Cancelled" ||
-        result.message === "Cancelled mid-processing"
-      ) {
-        throw new Error("Conversion was cancelled.");
+      const resultsRes = await fetch(
+        `${API_BASE}/results/?file_name=${encodeURIComponent(fileName)}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      if (!resultsRes.ok) {
+        throw new Error("Failed to fetch conversion results");
+      }
+
+      const resultsData = await resultsRes.json();
+
+      if (resultsData.status !== "done") {
+        throw new Error("Conversion not ready yet. Please try again.");
       }
 
       setProgress(100);
@@ -104,28 +142,38 @@ const LandingPage = () => {
         setProcessingOpen(false);
         navigate("/results", {
           state: {
-            convertedImage: result.converted_image,
-            docUrl: result.doc_url,
-            geminiJson: result.gemini_json,
-            convertedJson: result.converted_json,
+            fileName: fileName,
+            convertedImage: resultsData.converted_image,
+            docUrl: resultsData.doc_url,
+            geminiJson: resultsData.gemini_json,
+            convertedJson: resultsData.converted_json,
           },
         });
       }, 800);
     } catch (err) {
+      // ✅ abort handling
       if (err.name === "AbortError") {
-        console.log("Request was aborted");
-        return;
+        setError("Conversion cancelled");
+      } else {
+        setError(err.message || "Something went wrong");
       }
-      setError(err.message || "Something went wrong");
       setProgress(0);
     }
   };
 
-  const handleCancelProcessing = () => {
-    setProcessingOpen(false);
-    if (abortControllerRef.current) abortControllerRef.current.abort();
-  };
-
+  // return (
+  // 	<>
+  // 		<div className='flex flex-col items-center mt-20'>
+  // 			<h1 className='font-bold text-[40px]'>
+  // 				Convert your images to 3D images
+  // 			</h1>
+  // 			<p className='text-[18px] text-[#0D121B] text-center mt-2'>
+  // 				Transform raster images into JSON for seamless Onshape
+  // 				Integration. Design
+  // 				<br />
+  // 				faster with automatic vectorization.
+  // 			</p>
+  // 		</div>
   return (
     <>
       <div className="flex flex-col items-center mt-20">
@@ -198,8 +246,40 @@ const LandingPage = () => {
           </CardContent>
         </Card>
       </div>
+      {/* <div>
+								<input
+									type='file'
+									ref={inputRef}
+									accept='image/*'
+									className='hidden'
+									onChange={(e) => {
+										const file = e.target.files[0];
+										if (file) {
+											setSelectedFile(file);
+											setSelectedImage(
+												URL.createObjectURL(file),
+											);
+										}
+									}}
+								/>
+							</div>
+						)}
+					</CardContent>
+				</Card>
+			</div> */}
 
-      <div className="flex justify-center mt-15">
+      <div className="flex justify-center gap-5 mt-15">
+        {/* Cost Estimation — uploads first, then navigates with image_id */}
+        <Button
+          disabled={!selectedImage}
+          onClick={handleCostEstimation}
+          className="flex gap-2 text-white text-[18px] font-bold justify-center items-center bg-[#135BEC] hover:bg-[#135BEC] px-7 py-3 rounded-xl shadow-lg shadow-[#135BEC] w-70 h-14 cursor-pointer"
+        >
+          <Money />
+          Cost Estimation
+        </Button>
+
+        {/* Convert to 3D JSON */}
         <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
           <DialogTrigger asChild>
             <Button
@@ -232,8 +312,31 @@ const LandingPage = () => {
           </DialogContent>
         </Dialog>
       </div>
+      {/* <DialogContent className='bg-white'>
+						<DialogHeader>
+							<DialogTitle>Confirmation</DialogTitle>
+						</DialogHeader>
+						<DialogDescription className='text-xl mt-4'>
+							Are you sure you want to convert this image?
+						</DialogDescription>
+						<DialogFooter>
+							<Button
+								variant='outline'
+								onClick={() => setConfirmOpen(false)}
+							>
+								Cancel
+							</Button>
+							<Button
+								className='bg-[#135BEC] text-white'
+								onClick={handleProceed}
+							>
+								Proceed
+							</Button>
+						</DialogFooter>
+					</DialogContent> */}
+      {/* </Dialog> */}
+      {/* </div> */}
 
-      {/* Processing Dialog */}
       <Dialog open={processingOpen} onOpenChange={setProcessingOpen}>
         <DialogContent
           className="max-w-lg"
@@ -241,14 +344,20 @@ const LandingPage = () => {
           onEscapeKeyDown={(e) => e.preventDefault()}
         >
           <DialogTitle className="sr-only">Processing</DialogTitle>
+
           <div className="text-center space-y-6">
             <img src="/Visual.png" alt="processing" className="mx-auto w-24" />
+
             {error ? (
               <>
                 <div className="text-[24px] font-bold text-red-600">
-                  Conversion Failed
+                  {processingMode === "estimate"
+                    ? "Upload Failed"
+                    : "Conversion Failed"}
                 </div>
+
                 <div className="text-[#6B7280] text-[14px]">{error}</div>
+
                 <Button
                   className="bg-[#135BEC] text-white px-4 py-2 rounded-lg text-[14px] mt-6 cursor-pointer"
                   onClick={() => {
@@ -262,50 +371,53 @@ const LandingPage = () => {
             ) : (
               <>
                 <div className="text-[24px] font-bold text-[#111827]">
-                  Analyzing image and generating 3D path...
+                  {processingMode === "estimate"
+                    ? "Uploading image..."
+                    : "Analyzing image and generating 3D path..."}
                 </div>
+
                 <div className="text-[#6B7280] text-[14px]">
-                  This may take a few moments depending on image complexity and
-                  mesh density.
+                  {processingMode === "estimate"
+                    ? "Your image is being uploaded. You'll be redirected shortly."
+                    : "This may take a few moments depending on image complexity and mesh density."}
                 </div>
 
                 <div className="bg-[#135BEC]/5 border border-[#135BEC]/10 px-5 py-6 rounded-xl mt-6">
                   <div className="flex justify-between mb-2">
                     <span className="font-medium text-[16px]">
-                      Processing Raster Data
+                      {processingMode === "estimate"
+                        ? "Uploading"
+                        : "Processing Raster Data"}
                     </span>
+
                     <span className="text-[#135BEC] text-[14px] font-bold">
                       {progress}%
                     </span>
                   </div>
+
                   <Progress
                     value={progress}
                     className="w-full [&>div]:bg-[#135BEC]"
                   />
                 </div>
 
+                {/* CANCEL BUTTON UPDATED */}
                 <Button
                   className="bg-[#135BEC] text-white px-4 py-2 rounded-lg text-[14px] mt-6 cursor-pointer"
-                  onClick={handleCancelProcessing}
+                  onClick={() => {
+                    if (abortControllerRef.current) {
+                      abortControllerRef.current.abort();
+                    }
+                    setProcessingOpen(false);
+                  }}
                 >
-                  Cancel Processing
+                  Cancel
                 </Button>
               </>
             )}
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Features Section */}
-      <div className="flex justify-center gap-6 mt-20 mb-15">
-        {features.map((item, index) => (
-          <div key={index} className="bg-white w-60 p-6 border rounded-2xl">
-            {item.icon}
-            <div className="font-bold mt-4">{item.topic}</div>
-            <div className="text-sm text-gray-500">{item.description}</div>
-          </div>
-        ))}
-      </div>
     </>
   );
 };
