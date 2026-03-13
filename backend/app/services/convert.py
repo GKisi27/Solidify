@@ -290,38 +290,38 @@ def _detect_section_view(views: list[dict]) -> dict | None:
     return None
 
 
-def _project_section_circle(circle: dict, revolve_axis: dict) -> dict:
-    """
-    Project a section-view circle onto the front-view plane using the revolve axis.
+# def _project_section_circle(circle: dict, revolve_axis: dict) -> dict:
+#     """
+#     Project a section-view circle onto the front-view plane using the revolve axis.
 
-    For a horizontal axis the circle's X coordinate is kept and its Y is
-    snapped to the axis; for a vertical axis the opposite applies.  This
-    preserves the radial information (which drives the revolved profile)
-    while discarding the out-of-plane offset that is meaningless in the
-    front view.
+#     For a horizontal axis the circle's X coordinate is kept and its Y is
+#     snapped to the axis; for a vertical axis the opposite applies.  This
+#     preserves the radial information (which drives the revolved profile)
+#     while discarding the out-of-plane offset that is meaningless in the
+#     front view.
 
-    Used by plates only.
-    """
-    axis_vec = np.array([
-        revolve_axis["end_x"] - revolve_axis["start_x"],
-        revolve_axis["end_y"] - revolve_axis["start_y"],
-    ])
-    horizontal_axis = abs(axis_vec[0]) >= abs(axis_vec[1])
+#     Used by plates only.
+#     """
+#     axis_vec = np.array([
+#         revolve_axis["end_x"] - revolve_axis["start_x"],
+#         revolve_axis["end_y"] - revolve_axis["start_y"],
+#     ])
+#     horizontal_axis = abs(axis_vec[0]) >= abs(axis_vec[1])
 
-    if horizontal_axis:
-        return {
-            "type":     "CIRCLE",
-            "center_x": round(circle["center_x"], 2),
-            "center_y": round(revolve_axis["start_y"], 2),
-            "radius":   round(circle["radius"], 2),
-        }
-    else:
-        return {
-            "type":     "CIRCLE",
-            "center_x": round(revolve_axis["start_x"], 2),
-            "center_y": round(circle["center_y"], 2),
-            "radius":   round(circle["radius"], 2),
-        }
+#     if horizontal_axis:
+#         return {
+#             "type":     "CIRCLE",
+#             "center_x": round(circle["center_x"], 2),
+#             "center_y": round(revolve_axis["start_y"], 2),
+#             "radius":   round(circle["radius"], 2),
+#         }
+#     else:
+#         return {
+#             "type":     "CIRCLE",
+#             "center_x": round(revolve_axis["start_x"], 2),
+#             "center_y": round(circle["center_y"], 2),
+#             "radius":   round(circle["radius"], 2),
+#         }
 
 
 def _extract_shaft_section_entities(section_view: dict) -> list[dict]:
@@ -812,11 +812,14 @@ class OnshapeSession:
         return axis_sketch_fid, axis_entity_id, sketch_entities
 
 
-    def build_plate(self, features_url: str, views: list[dict]) -> None:
+    def build_plate(self, features_url: str, views: list[dict], stop_event=None) -> None:
         """Extrude-intersect plate workflow."""
         prev_fid: str | None = None
 
         for idx, view in enumerate(views, start=1):
+            if stop_event and stop_event.is_set():
+                print("Cancelled during build_plate")
+                return
             view_name = view.get("name", f"view{idx}").lower()
             if view_name not in self.SUPPORTED_VIEWS:
                 continue
@@ -833,8 +836,8 @@ class OnshapeSession:
                 sketch_entities,
             )
 
-            operation    = "NEW" if prev_fid is None else "INTERSECT"
-            opposite_dir = prev_fid is None
+            operation         = "NEW" if prev_fid is None else "INTERSECT"
+            opposite_dir      = prev_fid is None         
 
             prev_fid = self.add_extrude(
                 features_url,
@@ -845,57 +848,95 @@ class OnshapeSession:
             )
 
     def build_shaft(
-        self,
-        features_url: str,
-        views: list[dict],
-        revolve_axis: dict | None,
-    ) -> None:
-        """
-        Revolve workflow for shafts.
+            self,
+            features_url: str,
+            views: list[dict],
+            revolve_axis: dict | None,
+            stop_event=None
+        ) -> None:
+            """Revolve-intersect shaft workflow."""
+            prev_fid: str | None = None
 
-        Matches app_RevolveFull_.py: iterates over ALL valid views (front/top/right),
-        posts a sketch + revolve for each one. The first view uses operation="NEW",
-        every subsequent view uses operation="INTERSECT" — identical pattern to
-        build_plate but with revolve instead of extrude.
-        """
-        prev_fid: str | None = None
+            for idx, view in enumerate(views, start=1):
+                if stop_event and stop_event.is_set():
+                    print("Cancelled during build_shaft")
+                    return
+                view_name = view.get("name", f"view{idx}").lower()
+                if view_name not in self.SUPPORTED_VIEWS:
+                    continue
 
-        for idx, view in enumerate(views, start=1):
-            view_name = view.get("name", f"view{idx}").lower()
-            if view_name not in self.SUPPORTED_VIEWS:
-                continue
+                entities = view.get("entities", [])
+                if not entities:
+                    continue
 
-            entities = view.get("entities", [])
-            if not entities:
-                continue
+                sketch_entities, last_id = build_sketch_entities(entities, return_last_id=True)
 
-            sketch_entities, last_id = build_sketch_entities(entities, return_last_id=True)
+                # --- Axis sketch (dedicated) ---
+                axis_sketch_fid: str | None = None
+                axis_entity_id: str | None  = None
 
-            axis_sketch_fid, axis_entity_id, sketch_entities = self._resolve_axis(
-                features_url, view_name, idx, revolve_axis, sketch_entities, entities
-            )
-            if not axis_entity_id:
-                axis_entity_id = last_id
+                if revolve_axis and isinstance(revolve_axis, dict) and "start_x" in revolve_axis:
+                    axis_id     = "revolve-axis"
+                    axis_entity = self._build_axis_entity(revolve_axis, axis_id)
+                    try:
+                        axis_sketch_fid = self.add_sketch(
+                            features_url,
+                            f"SketchAxis {idx} ({view_name})",
+                            view_name,
+                            [axis_entity],
+                        )
+                        axis_entity_id = axis_id
+                    except requests.HTTPError:
+                        axis_sketch_fid = None
 
-            sketch_fid = self.add_sketch(
-                features_url,
-                f"Sketch {idx} ({view_name})",
-                view_name,
-                sketch_entities,
-            )
+                # Fallback: append horizontal axis to profile sketch
+                if not axis_sketch_fid:
+                    max_x = max(
+                        (e.get("end_x", 0) for e in entities if "end_x" in e),
+                        default=100,
+                    ) * _MM_TO_M
+                    axis_id     = "revolve-axis-line"
+                    axis_entity = {
+                        "btType":     "BTMSketchCurveSegment-155",
+                        "startParam": 0.0,
+                        "endParam":   1.0,
+                        "geometry": {
+                            "btType": "BTCurveGeometryLine-117",
+                            "pntX":   0.0,
+                            "pntY":   0.0,
+                            "dirX":   max_x,
+                            "dirY":   0.0,
+                        },
+                        "entityId":       axis_id,
+                        "startPointId":   f"{axis_id}.start",
+                        "endPointId":     f"{axis_id}.end",
+                        "isConstruction": True,
+                    }
+                    sketch_entities.append(axis_entity)
+                    axis_entity_id = axis_id
 
-            operation  = "NEW" if prev_fid is None else "INTERSECT"
-            axis_ref   = axis_sketch_fid if axis_sketch_fid else sketch_fid
+                # Profile sketch
+                sketch_fid = self.add_sketch(
+                    features_url,
+                    f"Sketch {idx} ({view_name})",
+                    view_name,
+                    sketch_entities,
+                )
 
-            prev_fid = self.add_revolve(
-                features_url,
-                f"Revolve {idx} ({view_name})",
-                sketch_fid,
-                axis_ref,
-                axis_entity_id,
-                operation=operation,
-            )
-            time.sleep(0.2)
+                axis_ref = axis_sketch_fid if axis_sketch_fid else sketch_fid
+                if not axis_entity_id:
+                    axis_entity_id = last_id
+
+                operation = "NEW" if prev_fid is None else "INTERSECT"
+                prev_fid  = self.add_revolve(
+                    features_url,
+                    f"Revolve {idx} ({view_name})",
+                    sketch_fid,
+                    axis_ref,
+                    axis_entity_id,
+                    operation=operation,
+                )
+                time.sleep(0.2)
             
 # This pipeline is used to convert 2D images to 3D models in OnShape
 
