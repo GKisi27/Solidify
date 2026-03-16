@@ -3,11 +3,12 @@ prompt: |
             Analyze the provided 2D mechanical CAD image of a cylindrical shaft/pin. The image contains a front view (length and outer profile) and may contain a sectional view showing hollowness or internal bores.
             Task:
             1) Identify the revolve axis (centerline) and state its direction (horizontal or vertical). Include the axis in the final JSON as "revolve_axis".
-            2) Extract only the **upper-half outer contour** from the FRONT view relative to the revolve axis. Do NOT include the lower half. Provide coordinates in JSON.
+            2) Extract only the **upper-half outer contour** from the FRONT view relative to the revolve axis. Do NOT include the lower half. Provide coordinates in JSON. Remember, it should be a closed shape.
             3) If a SECTION view (labelled "section", "A-A", or similar) shows internal hollowness / bores:
             - Measure inner diameters from that section.
             - Project these inner profiles into the FRONT view coordinate system.
             - Include **only the upper-half of the internal geometry** above the revolve axis in the "front" view entities.
+            - The shaded region is the material region and unshaded region is hallow. Provide JSON for shaded region.  It should be a closed region.
             - Include internal steps, hollowness, bore transitions, arcs, and chamfers revealed in the sectional view, but only above the revolve axis.
             4) Fillets are rounded corners; represent them as "ARC".
             5) Chamfers are straight edges connecting intersecting lines; represent them as "LINE" with distance*angle notation.
