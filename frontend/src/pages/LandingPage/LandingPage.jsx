@@ -418,6 +418,15 @@ const LandingPage = () => {
           </div>
         </DialogContent>
       </Dialog>
+      <div className="flex justify-center gap-6 mt-20 mb-15">
+        {features.map((item, index) => (
+          <div key={index} className="bg-white w-60 p-6 border rounded-2xl">
+            {item.icon}
+            <div className="font-bold mt-4">{item.topic}</div>
+            <div className="text-sm text-gray-500">{item.description}</div>
+          </div>
+        ))}
+      </div>
     </>
   );
 };
