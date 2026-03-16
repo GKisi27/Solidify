@@ -92,3 +92,4 @@ coverage/
 *.lcov
 
 /data
+solidify_db.session.sql

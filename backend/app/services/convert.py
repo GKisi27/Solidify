@@ -14,7 +14,7 @@ from PIL import Image
 import google.genai as genai
 from google.genai import types
 from onshape_client.client import Client
-from app.services.to_db import save_image, save_json
+from app.services.to_db import save_history
 
 def load_config() -> dict:
     load_dotenv()
@@ -967,7 +967,7 @@ def convert_to_3d(
         return stop_event is not None and stop_event.is_set()
     
     cfg = load_config()
-    save_image(image_bytes)
+    # save_image(image_bytes)
     if cancelled():
         return None
     gemini_client = get_gemini_client(cfg["gemini_api_key"])
@@ -981,7 +981,6 @@ def convert_to_3d(
     converted_json = convert_json_format(gemini_json)
     converted_path.write_text(json.dumps(converted_json, indent=2), encoding="utf-8")
 
-    save_json(gemini_json, converted_json)
     if cancelled():
         return None
     session = OnshapeSession(cfg["onshape_access"], cfg["onshape_secret"], cfg["onshape_base"])
@@ -1001,4 +1000,6 @@ def convert_to_3d(
     print(gemini_path, converted_path)
 
     doc_url = f"{cfg['onshape_base']}/documents/{did}/w/{wid}/e/{eid}"
+    save_history(image_bytes, file_stem, gemini_json=gemini_json, converted_json=converted_json, history_type="convert_to_3d", doc_url= doc_url)
+
     return doc_url, gemini_path, converted_path

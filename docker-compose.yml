@@ -15,7 +15,7 @@ services:
       qdrant:
         condition: service_started
     environment:
-      DATABASE_URL: postgresql://postgres:1@postgres:5432/mydb
+      DATABASE_URL: postgresql://postgres:solidify123@postgres:5432/mydb
       REDIS_HOST: redis
       DATA_DIR: /solidify/data
       QDRANT_URL: http://qdrant_vector_db:6333
@@ -43,10 +43,10 @@ services:
     container_name: postgres_db
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1
+      POSTGRES_PASSWORD: solidify123
       POSTGRES_DB: mydb
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

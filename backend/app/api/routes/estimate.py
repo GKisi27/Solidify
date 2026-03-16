@@ -1,3 +1,6 @@
+import asyncio
+import io
+
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from typing import Optional, List
 import os, tempfile, json
@@ -5,6 +8,8 @@ from fastapi.responses import JSONResponse
 from app.services.cost_estimator import (
     MATERIAL_DATABASE, run_pipeline, TopologyParser, CostCalculator, CostBreakdown
 )
+from PIL import Image
+from app.services.to_db import save_history
 
 router = APIRouter(tags=["estimate"])
 
@@ -54,9 +59,14 @@ async def estimate(
             "machine_rate_per_hour": wj_rate if (wj_rate and wj_rate > 0) else round(wj_power * wj_elec, 4)
         }
     
+    await image.seek(0)
+    image_bytes = await image.read()
+    if not image_bytes:
+        raise HTTPException(400, "Uploaded file is empty.")
+    
     suffix = os.path.splitext(image.filename or "image.png")[1] or ".png"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(await image.read())
+        tmp.write(image_bytes)
         tmp_path = tmp.name
 
 
@@ -73,8 +83,8 @@ async def estimate(
         if thickness <= 0:
             raise HTTPException(400, "Thickness must be greater than 0.")
         
-        print(thickness)
-        print(machine_params)
+        # print(thickness)
+        # print(machine_params)
 
         # ── Calculate costs ──
         calculator = CostCalculator(geometry, machine_params)
@@ -95,6 +105,8 @@ async def estimate(
                         quantity=quantity,
                         notes=[f"Error: {e}"],
                     ))
+                    
+        await asyncio.to_thread(save_history, image_bytes, image.filename, "cost_estimation", None, None)
 
         # ── Return response ──
         return JSONResponse({

@@ -33,7 +33,6 @@ export default function Result() {
 
   const { convertedImage, docUrl, geminiJson, convertedJson } = state;
 
-  // Utility to download JSON files
   const downloadJson = (data, filename) => {
     const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: "application/json",

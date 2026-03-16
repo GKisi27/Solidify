@@ -19,7 +19,7 @@ app.include_router(api_router)
 def startup_event():
     from app.services.cost_estimator import _ensure_kb
     from app.core.database import Base, engine
-    # Create database tables if not exist
+    import app.models
     Base.metadata.create_all(bind=engine)
     # Initialize knowledge base or other services
     _ensure_kb()

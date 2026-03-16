@@ -12,9 +12,9 @@ hashed_password = hashlib.sha256(password.encode()).hexdigest()
 conn = psycopg2.connect(
 database="mydb",
 user="postgres",
-password="1",
+password="solidify123",
 host="127.0.0.1",
-port=5432
+port=5433
 )
 
 cur = conn.cursor()

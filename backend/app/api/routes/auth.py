@@ -11,7 +11,8 @@ async def login(username: str = Form(...), password: str = Form(...)):
             return {
                 "access_token": result["token"],
                 "token_type": "bearer",
-                "username": result["username"]
+                "username": result["username"],
+                "user_id": result["user_id"]
             }
         else:
             raise HTTPException(status_code=401, detail="Invalid username or password")
