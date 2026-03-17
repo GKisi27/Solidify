@@ -150,7 +150,7 @@ def call_gemini(
     """
     config = types.GenerateContentConfig(
         response_mime_type="application/json",
-        temperature=1,
+        temperature=0,
     )
 
     response = client.models.generate_content(
