@@ -188,11 +188,11 @@ const LandingPage = () => {
 			}
 
 			const convertData = await convertRes.json();
-			const fileName = convertData.file;
+			const userId = localStorage.getItem('user_id');
 			setProgress(90);
 
 			const resultsRes = await fetch(
-				`${API_BASE}/results/?file_name=${encodeURIComponent(fileName)}`,
+				`${API_BASE}/results?user_id=${userId}`,
 				{ headers: { Authorization: `Bearer ${token}` } },
 			);
 
@@ -211,7 +211,6 @@ const LandingPage = () => {
 				setProcessingOpen(false);
 				navigate('/results', {
 					state: {
-						fileName,
 						convertedImage: resultsData.converted_image,
 						docUrl: resultsData.doc_url,
 						geminiJson: resultsData.gemini_json,
@@ -226,6 +225,34 @@ const LandingPage = () => {
 				setError(err.message || 'Something went wrong');
 			}
 			setProgress(0);
+		}
+	};
+
+	
+	const handleHistoryClick = async (item) => {
+		if (item.type !== 'convert') return;
+
+		try {
+			const token = localStorage.getItem('token');
+			const res = await fetch(
+				`http://localhost:8000/history/${item.id}`,
+				{
+					headers: { Authorization: `Bearer ${token}` },
+				},
+			);
+			if (!res.ok) throw new Error('Failed to load history item');
+
+			const data = await res.json();
+			navigate('/results', {
+				state: {
+					convertedImage: data.converted_image,
+					docUrl: data.doc_url,
+					geminiJson: data.gemini_json,
+					convertedJson: data.converted_json,
+				},
+			});
+		} catch (err) {
+			console.error(err);
 		}
 	};
 
@@ -451,12 +478,7 @@ const LandingPage = () => {
 
 			{/* ── History Sidebar ── */}
 			<div className='w-80 pt-14 flex-shrink-0'>
-				<HistorySidebar
-					history={conversionHistory}
-					onItemClick={(item) =>
-						console.log('Clicked history item:', item)
-					}
-				/>
+				<HistorySidebar onItemClick={handleHistoryClick} />
 			</div>
 		</div>
 	);

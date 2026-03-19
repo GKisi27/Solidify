@@ -16,5 +16,9 @@ async def login(username: str = Form(...), password: str = Form(...)):
             }
         else:
             raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    except HTTPException:
+        raise 
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

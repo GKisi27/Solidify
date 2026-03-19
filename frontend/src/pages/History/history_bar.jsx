@@ -15,44 +15,35 @@ const ImageIcon = () => (
 	</svg>
 );
 
-// Maps backend HistoryType enum values to frontend filter keys
 const TYPE_MAP = {
 	convert_to_3d: 'convert',
 	cost_estimation: 'estimate',
 };
 
-// Maps a raw backend History record to the shape the UI expects
 const mapEntry = (entry) => ({
 	id: entry.id,
 	name: entry.filename,
-	// Backend has no timestamp field — fall back to id ordering label
 	time: `#${entry.id}`,
 	type: TYPE_MAP[entry.type] ?? entry.type,
-	// Size is not stored in the DB; derive from base64 length if available
 	size: entry.image_base64
 		? `~${Math.ceil((entry.image_base64.length * 0.75) / 1024)} KB`
 		: '—',
-	// Cost is not stored; show placeholder
 	cost: null,
-	// Use the stored base64 image as the thumbnail
 	thumb: entry.image_base64
 		? `data:image/png;base64,${entry.image_base64}`
 		: null,
 });
 
 const HistorySidebar = ({ userId: userIdProp, onItemClick }) => {
-	// Accept userId as a prop, or fall back to whatever was stored at login
 	const userId =
 		userIdProp ?? Number(localStorage.getItem('user_id')) ?? null;
 	const [history, setHistory] = useState([]);
 	const [filter, setFilter] = useState('all');
 	const [retryCount, setRetryCount] = useState(0);
-	// Start as true so the spinner shows while waiting for userId to resolve
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 
 	useEffect(() => {
-		// userId not ready yet (undefined / null) — stay in loading state
 		if (userId == null) return;
 
 		let cancelled = false;
@@ -61,8 +52,10 @@ const HistorySidebar = ({ userId: userIdProp, onItemClick }) => {
 			setLoading(true);
 			setError(null);
 			try {
+				const token = localStorage.getItem('token');
 				const res = await fetch(
 					`http://localhost:8000/history/user/${userId}`,
+					{ headers: { Authorization: `Bearer ${token}` } },
 				);
 				if (!res.ok) throw new Error(`Server error: ${res.status}`);
 				const data = await res.json();
@@ -76,17 +69,10 @@ const HistorySidebar = ({ userId: userIdProp, onItemClick }) => {
 		};
 
 		fetchHistory();
-		// Cleanup: ignore stale responses if userId changes mid-flight
 		return () => {
 			cancelled = true;
 		};
 	}, [userId, retryCount]);
-
-
-	const clearHistory = async () => {
-		// Optimistic local clear; add a DELETE endpoint call here if available
-		setHistory([]);
-	};
 
 	const filtered =
 		filter === 'all' ? history : history.filter((h) => h.type === filter);
@@ -98,12 +84,6 @@ const HistorySidebar = ({ userId: userIdProp, onItemClick }) => {
 				<span className='font-bold text-[15px] text-[#0D121B]'>
 					Conversion History
 				</span>
-				<button
-					onClick={clearHistory}
-					className='text-[11px] text-gray-400 hover:text-gray-600 transition-colors cursor-pointer'
-				>
-					Clear all
-				</button>
 			</div>
 
 			{/* Filter pills */}
@@ -151,8 +131,14 @@ const HistorySidebar = ({ userId: userIdProp, onItemClick }) => {
 					filtered.map((item) => (
 						<div
 							key={item.id}
-							onClick={() => onItemClick?.(item)}
-							className='flex items-center gap-3 px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer'
+							onClick={() =>
+								item.type === 'convert' && onItemClick?.(item)
+							}
+							className={`flex items-center gap-3 px-4 py-3 border-b border-gray-50 transition-colors ${
+								item.type === 'convert'
+									? 'hover:bg-gray-50 cursor-pointer'
+									: 'opacity-60 cursor-default'
+							}`}
 						>
 							{/* Thumbnail */}
 							<div className='w-11 h-11 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden text-gray-400'>

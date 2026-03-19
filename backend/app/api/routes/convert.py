@@ -1,6 +1,5 @@
 import asyncio
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
-from app.services.auth_services import get_current_user
 from app.models.user import User
 from app.services.convert import convert_to_3d
 import base64, json, io
@@ -8,8 +7,6 @@ from PIL import Image
 from concurrent.futures import ThreadPoolExecutor
 import threading
 from fastapi import Request
-import uuid
-
 
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -25,9 +22,8 @@ async def convert_to_3d_endpoint(request: Request, file: UploadFile = File(...))
     
     loop = asyncio.get_event_loop()
     stop_event = threading.Event()
-    conversion_id = str(uuid.uuid4())
 
-    future = loop.run_in_executor(executor, convert_to_3d, image, file.filename, image_bytes, stop_event, conversion_id)
+    future = loop.run_in_executor(executor, convert_to_3d, image, file.filename, image_bytes, stop_event)
     
     while not future.done():
         if await request.is_disconnected():
@@ -49,7 +45,6 @@ async def convert_to_3d_endpoint(request: Request, file: UploadFile = File(...))
 
     return {
         "message": "3D conversion done",
-        "conversion_id": conversion_id,  
         "doc_url": doc_url,
     }
 
@@ -61,23 +56,24 @@ async def get_results(user_id: int):
 
     db = SessionLocal()
     try:
-        record = (
+        latest = (
             db.query(History)
-            .filter(History.user_id == user_id).first()
+            .filter(History.user_id == user_id)
+            .order_by(History.id.desc())
+            .first()
         )
     finally:
         db.close()
 
-    if not record:
+    if not latest:
         raise HTTPException(status_code=404, detail="Result not found")
 
-    from app.services.get_data import get_json
-    gemini_json, converted_json = record.gemini_data, record.converted_data
+    gemini_json, converted_json = latest.gemini_data, latest.converted_data
 
     return {
         "status": "done",
-        "converted_image": f"data:image/png;base64,{record.image_base64}",
-        "doc_url": record.doc_url,
+        "converted_image": f"data:image/png;base64,{latest.image_base64}",
+        "doc_url": latest.doc_url,
         "gemini_json": gemini_json,
         "converted_json": converted_json,
     }

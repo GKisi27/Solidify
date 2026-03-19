@@ -44,14 +44,20 @@ export default function Login() {
 				localStorage.setItem('token', response.data.access_token);
 				localStorage.setItem('username', response.data.username);
 				localStorage.setItem('user_id', response.data.user_id);
-        console.log('login response:', response.data.user_id);
 				navigate('/');
 			} else {
 				setError('Invalid credentials');
 			}
 		} catch (err) {
-			console.error(err);
-			setError('Server error. Please try again later.');
+			if (err.response) {
+				if (err.response.status === 401) {
+					setError('Invalid username or password');
+				} else {
+					setError('Server error. Please try again later.');
+				}
+			} else {
+				setError('Network error');
+			}
 		}
     
 
