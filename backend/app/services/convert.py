@@ -34,8 +34,17 @@ def load_config() -> dict:
     return config
 
 
-def load_prompt(prompt_file: str = "prompt.yml") -> str:
-    
+PROMPT_FILES = {
+    "plate": "prompt1.yml",
+    "shaft": "prompt2.yml",
+}
+
+
+def load_prompt(part_type: str = "plate") -> str:
+    prompt_file = PROMPT_FILES.get(part_type)
+    if not prompt_file:
+        raise ValueError(f"Unknown part_type '{part_type}'. Must be one of: {list(PROMPT_FILES)}")
+
     base_dir = Path(__file__).resolve().parent
     full_path = base_dir / prompt_file
 
@@ -98,6 +107,33 @@ def get_gemini_client(api_key: str) -> genai.Client:
     """Instantiate and return a Gemini client."""
     return genai.Client(api_key=api_key)
 
+
+def detect_part_type(image: Image.Image, client: genai.Client, model: str) -> str:
+    """
+    Ask Gemini to classify the image as a plate or shaft.
+
+    Returns:
+        ``"shaft"`` if the image is a shaft/cylindrical part, ``"plate"`` otherwise.
+    """
+    classification_prompt = (
+        "You are an expert at reading 2D engineering drawings. "
+        "Look at this drawing and classify the part as one of two types:\n"
+        "- 'shaft': a cylindrical/rotational part (has a revolve axis, cross-section views, symmetric profile)\n"
+        "- 'plate': a flat/prismatic part (extruded from top/front/side views, no revolve axis)\n"
+        "Reply with only one word: shaft or plate."
+    )
+
+    response = client.models.generate_content(
+        model=model,
+        contents=[image, classification_prompt],
+    )
+
+    answer = response.text.strip().lower()
+    part_type = "shaft" if "shaft" in answer else "plate"
+    print(f"[detect_part_type] Gemini classified image as: '{part_type}' (raw response: '{answer}')")
+    return part_type
+
+
 # Gemini 3.1 or gemini 3?? (test going on)
 
 def call_gemini(
@@ -114,7 +150,7 @@ def call_gemini(
     """
     config = types.GenerateContentConfig(
         response_mime_type="application/json",
-        temperature=1,
+        temperature=0,
     )
 
     response = client.models.generate_content(
@@ -288,40 +324,6 @@ def _detect_section_view(views: list[dict]) -> dict | None:
         if any(kw in name for kw in SECTION_KEYWORDS):
             return view
     return None
-
-
-# def _project_section_circle(circle: dict, revolve_axis: dict) -> dict:
-#     """
-#     Project a section-view circle onto the front-view plane using the revolve axis.
-
-#     For a horizontal axis the circle's X coordinate is kept and its Y is
-#     snapped to the axis; for a vertical axis the opposite applies.  This
-#     preserves the radial information (which drives the revolved profile)
-#     while discarding the out-of-plane offset that is meaningless in the
-#     front view.
-
-#     Used by plates only.
-#     """
-#     axis_vec = np.array([
-#         revolve_axis["end_x"] - revolve_axis["start_x"],
-#         revolve_axis["end_y"] - revolve_axis["start_y"],
-#     ])
-#     horizontal_axis = abs(axis_vec[0]) >= abs(axis_vec[1])
-
-#     if horizontal_axis:
-#         return {
-#             "type":     "CIRCLE",
-#             "center_x": round(circle["center_x"], 2),
-#             "center_y": round(revolve_axis["start_y"], 2),
-#             "radius":   round(circle["radius"], 2),
-#         }
-#     else:
-#         return {
-#             "type":     "CIRCLE",
-#             "center_x": round(revolve_axis["start_x"], 2),
-#             "center_y": round(circle["center_y"], 2),
-#             "radius":   round(circle["radius"], 2),
-#         }
 
 
 def _extract_shaft_section_entities(section_view: dict) -> list[dict]:
@@ -725,9 +727,6 @@ class OnshapeSession:
         data    = self._post(url, payload)
         return data["feature"]["featureId"]
 
-    # ------------------------------------------------------------------
-    # Axis entity builder
-    # ------------------------------------------------------------------
 
     def _build_axis_entity(self, axis_data: dict, entity_id: str = "revolve-axis") -> dict:
         """Return a construction-line sketch entity dict for the revolve axis."""
@@ -946,7 +945,6 @@ def convert_to_3d(
     image_bytes: bytes,
     stop_event = None,
     *,
-    prompt_file: str = "prompt.yml",
     output_dir: str | None = None,
 ) -> tuple[str, Path, Path]:
     """
@@ -956,7 +954,7 @@ def convert_to_3d(
         image:        File path, raw bytes, or BytesIO of the input image.
         file_stem:    Stem used for output file names (e.g. ``"bracket"``).
         image_bytes:  Raw bytes of the image (saved to DB).
-        prompt_file:  Path to the YAML file containing the Gemini prompt.
+        stop_event:   Optional threading event to cancel the pipeline mid-run.
         output_dir:   Directory for output JSON files (defaults to project data dir).
 
     Returns:
@@ -965,13 +963,20 @@ def convert_to_3d(
     def cancelled():
         """Returns True if the client cancelled the request"""
         return stop_event is not None and stop_event.is_set()
-    
+
     cfg = load_config()
     # save_image(image_bytes)
     if cancelled():
         return None
+
     gemini_client = get_gemini_client(cfg["gemini_api_key"])
-    prompt = load_prompt(prompt_file)
+
+    # Auto-detect whether the image is a plate or shaft, then load the right prompt.
+    part_type = detect_part_type(image, gemini_client, cfg["gemini_model"])
+    if cancelled():
+        return None
+
+    prompt = load_prompt(part_type)
     gemini_json = call_gemini(image, prompt, gemini_client, model=cfg["gemini_model"])
     if cancelled():
         return None
