@@ -132,7 +132,7 @@ const CostEstimation = () => {
 				<div className='text-[18px] text-[#64748B]'>
 					Configure your manufacturing parameters to get an instant
 					quote.
-				</div>
+				</div> 
 
 				{!imageFile && ( 
 					<div className='mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-yellow-800 text-[14px]'>
