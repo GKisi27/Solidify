@@ -78,14 +78,14 @@ const HistorySidebar = ({ userId: userIdProp, onItemClick }) => {
 		filter === 'all' ? history : history.filter((h) => h.type === filter);
 
 	return (
-		<div className='flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm w-80 h-full overflow-hidden'>
+		<div className='flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm w-80 max-h-[500px] overflow-hidden'>
+			{' '}
 			{/* Header */}
 			<div className='flex items-center justify-between px-4 py-3 border-b border-gray-100'>
 				<span className='font-bold text-[15px] text-[#0D121B]'>
 					Conversion History
 				</span>
 			</div>
-
 			{/* Filter pills */}
 			<div className='flex gap-2 px-4 py-2 border-b border-gray-100'>
 				{[
@@ -106,7 +106,6 @@ const HistorySidebar = ({ userId: userIdProp, onItemClick }) => {
 					</button>
 				))}
 			</div>
-
 			{/* List */}
 			<div className='overflow-y-auto flex-1'>
 				{loading ? (
