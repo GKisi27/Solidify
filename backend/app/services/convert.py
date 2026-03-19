@@ -108,7 +108,7 @@ def get_gemini_client(api_key: str) -> genai.Client:
     return genai.Client(api_key=api_key)
 
 
-def detect_part_type(image: Image.Image, client: genai.Client, model: str) -> str:
+def detect_part_type(image: Image.Image, client: genai.Client, model: str, stop_event=None) -> str:
     """
     Ask Gemini to classify the image as a plate or shaft.
 
@@ -127,7 +127,10 @@ def detect_part_type(image: Image.Image, client: genai.Client, model: str) -> st
         model=model,
         contents=[image, classification_prompt],
     )
-
+    
+    if stop_event and stop_event.is_set():
+                    print("Cancelled during Detection of the Part")
+                    return
     answer = response.text.strip().lower()
     part_type = "shaft" if "shaft" in answer else "plate"
     print(f"[detect_part_type] Gemini classified image as: '{part_type}' (raw response: '{answer}')")
@@ -970,9 +973,9 @@ def convert_to_3d(
         return None
 
     gemini_client = get_gemini_client(cfg["gemini_api_key"])
-
+    
     # Auto-detect whether the image is a plate or shaft, then load the right prompt.
-    part_type = detect_part_type(image, gemini_client, cfg["gemini_model"])
+    part_type = detect_part_type(image, gemini_client, cfg["gemini_model"],stop_event=stop_event)
     if cancelled():
         return None
 
