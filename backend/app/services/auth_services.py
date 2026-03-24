@@ -10,7 +10,7 @@ from app.models.user import User
 
 SECRET_KEY = "Solidify" 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_HOURS = 1
+ACCESS_TOKEN_EXPIRE_HOURS = 8
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 

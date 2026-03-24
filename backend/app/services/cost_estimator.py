@@ -231,26 +231,37 @@ def extract_features(state: CADState):
         b64 = base64.b64encode(f.read()).decode("utf-8")
     mime, _ = mimetypes.guess_type(image_path)
     data_uri = f"data:{mime or 'image/png'};base64,{b64}"
-    response = gemini.invoke([{
-        "role": "user",
-        "content": [
-            {"type": "text", "text": (
-                "Analyze this CAD technical drawing CAREFULLY and extract:\n"
-                "1. OUTER SHAPE — trace perimeter clockwise from top-left, list each edge.\n"
-                "2. OUTER DIMENSIONS — extract exact values from visible dimension lines.\n"
-                "3. FILLETS AND RADII — look for R followed by number.\n"
-                "4. INNER HOLES — every circle/hole with Ø diameter.\n"
-                "5. CHAMFERS — Extract ALL chamfer annotations:\n"
-                "   - Record the EXACT label as written: e.g. '2×45°', '4×45°', 'C2', 'C4', '2X45', '4X45'\n"
-                "   - The number before ×45° (or after C) is the LEG — record it explicitly\n"
-                "   - Example: '2×45°' means leg=2, '4×45°' means leg=4\n"
-                "   - If multiple corners have the same chamfer, note the count (e.g. '4× C2')\n"
-                "   - Do NOT calculate the hypotenuse here — just record the raw label\n\n"
-                "Use visible dimension lines; do NOT estimate or derive."
-            )},
-            {"type": "image_url", "image_url": data_uri},
-        ],
-    }])
+    response = gemini.invoke([
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": (
+                    "Analyze this CAD technical drawing CAREFULLY and extract:\n\n"
+                    "1. OUTER SHAPE - Trace the perimeter clockwise starting from top-left\n"
+                    "   Identify each edge segment sequentially\n\n"
+                    "2. OUTER DIMENSIONS - Extract dimensions for EACH edge in sequence:\n"
+                    "   - PREFER dimension lines visible in drawing over calculations\n"
+                    "   - Look for ALL dimension arrows and numbers along the perimeter\n"
+                    "   - Record dimensions in order: edge1, edge2, edge3, etc. going around\n"
+                    "   - Examples: 55.6, 27.8, 13.7, 8.5, 15.6, 36.9, 5.7, etc.\n\n"
+                    "3. FILLETS AND RADII:\n"
+                    "   - Look for 'R' followed by number (e.g., R1.5, R2.4, R5.0)\n"
+                    "   - If marked as '4X R1.5', this means 4 fillets each with radius 1.5\n"
+                    "   - Extract the EXACT radius value from the drawing\n\n"
+                    "4. INNER HOLES - For EVERY circle/hole visible:\n"
+                    "   - Extract EVERY diameter marked with Ø symbol\n"
+                    "   - Include quantity if multiple circles are identical\n\n"
+                    "5. CHAMFERS - Extract if dimensioned\n\n"
+                    "CRITICAL: \n"
+                    "- Use visible dimension lines from drawing, NOT subtraction/calculation\n"
+                    "- If a dimension is labeled on the drawing, extract that EXACT value\n"
+                    "- Do NOT estimate or derive from other dimensions\n"
+                    "- Format: List all edge dimensions in sequence around the perimeter"
+                )},
+                {"type": "image_url", "image_url": data_uri}
+            ],
+        }
+    ])
     content = response.content
     if isinstance(content, list):
         content = " ".join(c if isinstance(c, str) else c.get("text", "") for c in content)
@@ -274,6 +285,11 @@ def retrieve_topology_rules(state: CADState):
 
 
 def generate_topology(state: CADState):
+    """
+    Generates topology JSON following the new multi-view schema.
+    Concentric circles, chamfer dimension = hypotenuse (leg × √2),
+    straight edge dimension = nominal − adjacent chamfer legs (or full nominal if chamfer leg unknown).
+    """
     prompt = f"""
 Using the following information:
 
@@ -299,16 +315,9 @@ SCHEMA RULES — FOLLOW EXACTLY
 3. OUTER CLOSED LOOPS (region = MATERIAL)
 
    CHAMFER EDGES (45° chamfers):
-   - The drawing label (C4, 4×45°, 2×45°, C2, or plain '2') gives the LEG
-   - Store TWO fields for every chamfer edge:
-       "leg":       <raw leg value from drawing>       ← for auditability
-       "dimension": leg × 1.41421                     ← actual cut length (hypotenuse)
-   - Examples:
-       2×45° or C2  →  "leg": 2, "dimension": 2.828
-       4×45° or C4  →  "leg": 4, "dimension": 5.657
-       3×45° or C3  →  "leg": 3, "dimension": 4.243
-       1×45° or C1  →  "leg": 1, "dimension": 1.414
-   - ⚠ NEVER set dimension = raw leg (e.g. dimension=2 for a 2×45° chamfer is WRONG)
+   - The drawing label (C4, 4×45°, or plain "4") gives the LEG of the chamfer triangle
+   - dimension in JSON = leg × √2 = leg × 1.41421  (actual cut length = hypotenuse)
+     Examples: leg=4 → dimension=5.657  |  leg=2 → dimension=2.828  |  leg=3 → dimension=4.243
    - Set dimension to null ONLY if there is absolutely NO label for that chamfer
 
    STRAIGHT EDGES:
@@ -317,7 +326,7 @@ SCHEMA RULES — FOLLOW EXACTLY
    - Adjacent chamfer has UNKNOWN leg (null) → treat unknown leg as 0, use FULL nominal
      Example: nominal=70mm, adjacent chamfer is null → dimension = 70.0
    - No adjacent chamfer → dimension = full nominal length
-   - ⚠ NEVER set a straight edge to null just because a neighbouring chamfer is null
+   - :warning: NEVER set a straight edge to null just because a neighbouring chamfer is null
 
    FILLET EDGES:
    - dimension = radius value from drawing (e.g. R1.5 → 1.5). null if unlabeled
@@ -352,57 +361,62 @@ SCHEMA RULES — FOLLOW EXACTLY
 ═══════════════════════════════════════════════════════
 CHAMFER CALCULATION EXAMPLES:
 
-  CASE A — 4×45° chamfer (leg = 4):
+  CASE A — Chamfer leg IS labeled (e.g. 4×45°, C4, or plain '4'):
   Drawing: 100×60mm rectangle, 4mm chamfers all corners
-  ✗ WRONG:  chamfer dimension=4  (raw leg — NEVER do this)
+  ✗ WRONG:  straight=100, straight=60, chamfer=4
   ✓ CORRECT (8 edges clockwise):
     edge_1: straight, dimension = 100 − 4 − 4 = 92
-    edge_2: chamfer,  leg = 4,  dimension = 4 × 1.41421 = 5.657
+    edge_2: chamfer,  dimension = 4 × 1.41421 = 5.657
     edge_3: straight, dimension = 60 − 4 − 4 = 52
-    edge_4: chamfer,  leg = 4,  dimension = 5.657
+    edge_4: chamfer,  dimension = 5.657
     edge_5: straight, dimension = 92
-    edge_6: chamfer,  leg = 4,  dimension = 5.657
+    edge_6: chamfer,  dimension = 5.657
     edge_7: straight, dimension = 52
-    edge_8: chamfer,  leg = 4,  dimension = 5.657
+    edge_8: chamfer,  dimension = 5.657
 
-  CASE B — 2×45° chamfer (leg = 2):
-  Drawing: 80×50mm rectangle, 2mm chamfers all corners
-  ✗ WRONG:  chamfer dimension=2  (raw leg — NEVER do this)
-  ✓ CORRECT (8 edges clockwise):
-    edge_1: straight, dimension = 80 − 2 − 2 = 76
-    edge_2: chamfer,  leg = 2,  dimension = 2 × 1.41421 = 2.828
-    edge_3: straight, dimension = 50 − 2 − 2 = 46
-    edge_4: chamfer,  leg = 2,  dimension = 2.828
-    edge_5: straight, dimension = 76
-    edge_6: chamfer,  leg = 2,  dimension = 2.828
-    edge_7: straight, dimension = 46
-    edge_8: chamfer,  leg = 2,  dimension = 2.828
-
-  CASE C — Chamfer has NO label (unknown leg):
+  CASE B — Chamfer has NO label (unknown leg):
   Drawing: 70×50mm rectangle, chamfers present but no dimension shown
   ✗ WRONG:  straight=null, chamfer=null  ← NEVER null a straight edge
   ✓ CORRECT (unknown leg treated as 0 → use full nominal):
     edge_1: straight, dimension = 70.0
-    edge_2: chamfer,  leg = null, dimension = null
+    edge_2: chamfer,  dimension = null
     edge_3: straight, dimension = 50.0
-    edge_4: chamfer,  leg = null, dimension = null
+    edge_4: chamfer,  dimension = null
     edge_5: straight, dimension = 70.0
-    edge_6: chamfer,  leg = null, dimension = null
+    edge_6: chamfer,  dimension = null
     edge_7: straight, dimension = 50.0
-    edge_8: chamfer,  leg = null, dimension = null
+    edge_8: chamfer,  dimension = null
 ═══════════════════════════════════════════════════════
 Now generate the topology JSON for the provided image.
 ═══════════════════════════════════════════════════════
 """
-    response = gemini.invoke([{"role": "user", "content": [{"type": "text", "text": prompt}]}])
+
+    response = gemini.invoke([
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
+            ],
+        }
+    ])
+
     content = response.content
     if isinstance(content, list):
-        content = " ".join(c if isinstance(c, str) else c.get("text", "") for c in content)
+        content = " ".join([c if isinstance(c, str) else c.get("text", "") for c in content])
     elif isinstance(content, dict):
         content = content.get("text", "")
+
     raw = str(content).strip()
+
+    # Extract JSON between markers
+    import re
     match = re.search(r"<<<TOPOLOGY_START>>>(.*?)<<<TOPOLOGY_END>>>", raw, re.DOTALL)
-    return {"topology_output": match.group(1).strip() if match else raw}
+    if match:
+        topology_json = match.group(1).strip()
+    else:
+        topology_json = raw
+
+    return {"topology_output": topology_json}
 
 
 def should_retrieve(state: CADState):
@@ -574,6 +588,8 @@ class TopologyParser:
     def _parse_inner_loops(self, view: Dict):
         for loop in view.get("inner_closed_loops", []):
             ltype = loop.get("type", "")
+
+            # ---- Single circle ----
             if ltype == "Circle":
                 self.analysis.hole_count += 1
                 self.analysis.piercing_points += 1
@@ -591,6 +607,8 @@ class TopologyParser:
                             self.analysis.min_feature_size = d
                     except (ValueError, TypeError):
                         pass
+
+            # ---- Concentric circles ----
             elif "concentric_circle_details" in loop:
                 details = loop["concentric_circle_details"]
                 for i in range(1, details.get("circles", 0) + 1):
@@ -604,58 +622,70 @@ class TopologyParser:
                                 self.analysis.inner_perimeter += float(str(circ).replace("mm", ""))
                             except (ValueError, TypeError):
                                 pass
+                        diameter = cd.get("diameter")
+                        if diameter:
+                            try:
+                                d = float(str(diameter).replace("mm", ""))
+                                if self.analysis.min_feature_size == 0 or d < self.analysis.min_feature_size:
+                                    self.analysis.min_feature_size = d
+                            except (ValueError, TypeError):
+                                pass
+
+            # ---- Slot / Rectangle / Round slot ----
             elif ltype in ("Slot", "Rectangle") or "round" in ltype.lower():
                 self.analysis.hole_count += 1
                 self.analysis.piercing_points += 1
-                total_edges = loop.get("edges", 0)
+
+                total_edges      = loop.get("edges", 0)
                 edge_type_counts = loop.get("edge_type", {})
-                rep: Dict[str, float] = {}
-                for i in range(1, total_edges + 1):
-                    ed = loop.get(f"edge_{i}")
-                    if not ed:
-                        continue
+
+                def _edge_length(ed: Dict) -> Optional[float]:
+                    """Return the true arc/straight length for one edge dict."""
                     kind = ed.get("type", "")
-                    if kind in rep:
-                        continue
-                    length = None
                     if kind == "arc":
-                        # semicircle arc in slot: length = π × radius
+                        # Semicircle arc in slot: length = π × radius
                         r = ed.get("radius")
                         if r is not None and str(r) != "null":
                             try:
-                                length = np.pi * float(str(r).replace("mm", ""))
+                                return np.pi * float(str(r).replace("mm", ""))
                             except (ValueError, TypeError):
                                 pass
-                        if length is None:
-                            length = self._edge_dim(ed)
+                        return self._edge_dim(ed)
+
                     elif kind == "fillet":
                         # 90° corner fillet: arc length = (π/2) × radius
                         r = ed.get("radius")
                         if r is not None and str(r) != "null":
                             try:
-                                length = (np.pi / 2) * float(str(r).replace("mm", ""))
+                                return (np.pi / 2) * float(str(r).replace("mm", ""))
                             except (ValueError, TypeError):
                                 pass
-                        if length is None:
-                            v = self._edge_dim(ed)
-                            if v:
-                                length = (np.pi / 2) * v
+                        v = self._edge_dim(ed)
+                        return (np.pi / 2) * v if v else None
+
+                    elif kind == "straight":
+                        dim = ed.get("dimension")
+                        if dim is not None and str(dim) != "null":
+                            try:
+                                return float(str(dim).replace("mm", ""))
+                            except (ValueError, TypeError):
+                                pass
+                        return self._edge_dim(ed)
+
                     else:
-                        length = self._edge_dim(ed)
+                        return self._edge_dim(ed)
+
+                perim = 0.0
+                for i in range(1, total_edges + 1):
+                    ed = loop.get(f"edge_{i}")
+                    if not ed:
+                        continue
+                    length = _edge_length(ed)
                     if length:
-                        rep[kind] = length
+                        perim += length
 
-                # Normalize fillet/arc keys — LLM sometimes writes
-                # edge_type_counts as {"arc": N} but individual edges as
-                # {"type": "fillet"} or vice-versa.  Bridge the gap.
-                if "fillet" in rep and "arc" not in rep:
-                    rep["arc"] = rep["fillet"]
-                if "arc" in rep and "fillet" not in rep:
-                    rep["fillet"] = rep["arc"]
-
-                perim = sum(rep.get(k, 0) * c for k, c in edge_type_counts.items()) if edge_type_counts else sum(rep.values())
                 self.analysis.inner_perimeter += perim
-
+            
     def _estimate_area(self):
         if self.analysis.outer_perimeter > 0:
             estimated_side = self.analysis.outer_perimeter / 4
