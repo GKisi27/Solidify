@@ -19,9 +19,65 @@ services:
       REDIS_HOST: redis
       DATA_DIR: /solidify/data
       QDRANT_URL: http://qdrant_vector_db:6333
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      USE_CELERY: "true"
+      PYTHONPATH: /:/app
+      GEMINI_PAID_KEY: ${GEMINI_PAID_KEY}
+      access: ${access}
+      secret: ${secret}
     volumes:
       - ./backend:/app
       - ./data:/solidify/data
+      - ./worker:/worker
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: celery_worker
+    command: sh -c "cd /app && celery -A worker.celery_app worker --loglevel=info --concurrency=4"
+    depends_on:
+      - redis
+      - postgres
+      - backend
+    environment:
+      DATABASE_URL: postgresql://postgres:solidify123@postgres:5432/mydb
+      REDIS_HOST: redis
+      DATA_DIR: /solidify/data
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      GEMINI_PAID_KEY: ${GEMINI_PAID_KEY}
+      access: ${access}
+      secret: ${secret}
+      PYTHONPATH: /app:/
+    volumes:
+      - ./backend:/app
+      - ./data:/solidify/data
+      - ./worker:/worker
+    restart: unless-stopped
+
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: flower_monitor
+    command: sh -c "cd /app && celery -A worker.celery_app flower --port=5555"
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery_worker
+    environment:
+      DATABASE_URL: postgresql://postgres:solidify123@postgres:5432/mydb
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      PYTHONPATH: /app:/
+    volumes:
+      - ./backend:/app
+      - ./data:/solidify/data
+      - ./worker:/worker
+    restart: unless-stopped
 
   frontend:
     build:

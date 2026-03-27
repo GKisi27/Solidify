@@ -1,99 +1,74 @@
-# ═══════════════════════════════════════════════════════════════
-# SOLIDIFY - Makefile
-# ═══════════════════════════════════════════════════════════════
+# Solidify Makefile
+# Convenience commands for development and deployment
 
-.PHONY: help dev build test lint clean deploy-dev deploy-prod
+.PHONY: help dev backend frontend celery flower seed-users build up down clean test
 
-# ─────────────────────────────────────────────────────────────────
-# Help
-# ─────────────────────────────────────────────────────────────────
 help:
-	@echo "Solidify - Available Commands"
-	@echo "────────────────────────────────────────"
-	@echo "  make dev          Start development environment"
-	@echo "  make build        Build all Docker images"
-	@echo "  make test         Run all tests"
-	@echo "  make lint         Run linters"
-	@echo "  make clean        Clean up containers and volumes"
-	@echo "  make deploy-dev   Deploy to development"
-	@echo "  make deploy-prod  Deploy to production"
+	@echo "Solidify Makefile Commands"
+	@echo "=========================="
+	@echo ""
+	@echo "Development:"
+	@echo "  make dev          - Start all services (backend, frontend, celery, redis)"
+	@echo "  make backend      - Start backend API server only"
+	@echo "  make frontend     - Start frontend dev server only"
+	@echo "  make celery       - Start Celery worker only"
+	@echo "  make flower       - Start Flower monitoring UI"
+	@echo ""
+	@echo "Database:"
+	@echo "  make seed-users   - Add default users to database"
+	@echo ""
+	@echo "Docker:"
+	@echo "  make build        - Build Docker images"
+	@echo "  make up           - Start all Docker containers"
+	@echo "  make down         - Stop all Docker containers"
+	@echo "  make clean        - Remove all Docker containers and volumes"
+	@echo ""
+	@echo "Testing:"
+	@echo "  make test         - Run all tests"
+	@echo ""
 
-# ─────────────────────────────────────────────────────────────────
-# Development
-# ─────────────────────────────────────────────────────────────────
+# Development commands
 dev:
-	docker compose up -d
-	@echo "✓ Development environment started"
-	@echo "  Frontend: http://localhost:3000"
-	@echo "  Backend:  http://localhost:8000"
-	@echo "  API Docs: http://localhost:8000/docs"
+	docker-compose up -d
 
-stop:
-	docker compose down
-	@echo "✓ Development environment stopped"
+backend:
+	cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-logs:
-	docker compose logs -f
+frontend:
+	cd frontend && npm run dev
 
-# ─────────────────────────────────────────────────────────────────
-# Build
-# ─────────────────────────────────────────────────────────────────
+celery:
+	python scripts/start_celery_worker.py
+
+flower:
+	celery -A worker.celery_app flower --port=5555
+
+# Database utilities
+seed-users:
+	python scripts/add_user.py
+
+# Docker commands
 build:
-	docker compose build
-	@echo "✓ All images built"
+	docker-compose build
 
-build-prod:
-	docker compose -f docker-compose.prod.yml build
-	@echo "✓ Production images built"
+up:
+	docker-compose up -d
+	@echo ""
+	@echo "Services started:"
+	@echo "  Backend:  http://localhost:8000"
+	@echo "  Frontend: http://localhost:5173"
+	@echo "  Flower:   http://localhost:5555"
+	@echo ""
 
-# ─────────────────────────────────────────────────────────────────
-# Testing
-# ─────────────────────────────────────────────────────────────────
-test:
-	@echo "Running backend tests..."
-	cd backend && pytest
-	@echo "Running frontend tests..."
-	cd frontend && npm test
-	@echo "Running worker tests..."
-	cd worker && pytest
+down:
+	docker-compose down
 
-test-backend:
-	cd backend && pytest --cov=app
-
-test-frontend:
-	cd frontend && npm test
-
-test-e2e:
-	cd frontend && npm run test:e2e
-
-# ─────────────────────────────────────────────────────────────────
-# Linting
-# ─────────────────────────────────────────────────────────────────
-lint:
-	@echo "Linting backend..."
-	cd backend && ruff check .
-	@echo "Linting frontend..."
-	cd frontend && npm run lint
-
-format:
-	cd backend && ruff format .
-	cd frontend && npm run format
-
-# ─────────────────────────────────────────────────────────────────
-# Cleanup
-# ─────────────────────────────────────────────────────────────────
 clean:
-	docker compose down -v --remove-orphans
-	docker system prune -f
-	@echo "✓ Cleanup complete"
+	docker-compose down -v
+	@echo "Cleaned up containers and volumes"
 
-# ─────────────────────────────────────────────────────────────────
-# Deployment
-# ─────────────────────────────────────────────────────────────────
-deploy-dev:
-	@echo "Deploying to development..."
-	# Add deployment commands here
+# Testing
+test:
+	cd backend && pytest tests/
+	cd worker && pytest tests/
 
-deploy-prod:
-	@echo "Deploying to production..."
-	# Add deployment commands here

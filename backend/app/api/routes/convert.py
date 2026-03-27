@@ -1,4 +1,7 @@
 import asyncio
+import os
+import sys
+from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from app.models.user import User
 from app.services.convert import convert_to_3d
@@ -15,11 +18,57 @@ conversion_results = {}
 
 executor = ThreadPoolExecutor()
 
+# Add worker to path for Celery imports
+worker_path = Path(__file__).resolve().parent.parent.parent.parent / "worker"
+if str(worker_path) not in sys.path:
+    sys.path.insert(0, str(worker_path))
+
+# Try to import Celery pipeline (may not be available if Celery not running)
+USE_CELERY = os.getenv("USE_CELERY", "true").lower() == "true"
+celery_available = False
+
+if USE_CELERY:
+    try:
+        from worker.pipelines.conversion_pipeline import convert_image_to_3d
+        celery_available = True
+        print("✅ Celery pipeline loaded successfully")
+    except Exception as e:
+        print(f"⚠️  Celery not available, falling back to ThreadPoolExecutor: {e}")
+        celery_available = False
+
+
 @router.post("/convert")
 async def convert_to_3d_endpoint(request: Request, file: UploadFile = File(...)):
+    """
+    Convert a 2D image to a 3D CAD model.
+    
+    Supports two modes:
+    1. Celery (async, distributed) - Default if Celery is running
+    2. ThreadPoolExecutor (sync, in-process) - Fallback
+    
+    Returns task_id if using Celery, or direct result if using ThreadPoolExecutor.
+    """
     image_bytes = await file.read()
     image = Image.open(io.BytesIO(image_bytes))
     
+    # Use Celery if available
+    if celery_available:
+        try:
+            # Submit to Celery pipeline
+            result = convert_image_to_3d(image_bytes, file.filename)
+            
+            return {
+                "message": "Conversion started",
+                "task_id": result.id,
+                "status": "PENDING",
+                "backend": "celery",
+                "status_url": f"/files/task/{result.id}",
+            }
+        except Exception as e:
+            print(f"❌ Celery execution failed: {e}, falling back to ThreadPoolExecutor")
+            # Fall through to ThreadPoolExecutor
+    
+    # Fallback to ThreadPoolExecutor (original implementation)
     loop = asyncio.get_event_loop()
     stop_event = threading.Event()
 
@@ -36,7 +85,6 @@ async def convert_to_3d_endpoint(request: Request, file: UploadFile = File(...))
     if result is None:
         return {"message": "Cancelled mid-processing"}
 
-
     doc_url, gemini_path, converted_path = result  
 
     converted_bytes_io = io.BytesIO()
@@ -46,34 +94,105 @@ async def convert_to_3d_endpoint(request: Request, file: UploadFile = File(...))
     return {
         "message": "3D conversion done",
         "doc_url": doc_url,
+        "backend": "threadpool",
     }
 
 
+@router.get("/task/{task_id}")
+async def get_task_status(task_id: str):
+    """
+    Get the status of a Celery task.
+    
+    Args:
+        task_id: The Celery task ID returned from /convert endpoint
+        
+    Returns:
+        Task status and result if complete
+    """
+    if not celery_available:
+        raise HTTPException(
+            status_code=503,
+            detail="Celery is not available. Task status tracking requires Celery."
+        )
+    
+    try:
+        from celery.result import AsyncResult
+        from worker.celery_app import celery_app
+        
+        task_result = AsyncResult(task_id, app=celery_app)
+        
+        response = {
+            "task_id": task_id,
+            "status": task_result.state,
+            "ready": task_result.ready(),
+        }
+        
+        if task_result.ready():
+            if task_result.successful():
+                result = task_result.result
+                response["result"] = result
+                response["success"] = result.get("success", True) if isinstance(result, dict) else True
+                if isinstance(result, dict) and "doc_url" in result:
+                    response["doc_url"] = result["doc_url"]
+                if isinstance(result, dict) and "history_id" in result:
+                    response["history_id"] = result["history_id"]
+            else:
+                response["error"] = str(task_result.info)
+                response["success"] = False
+        elif task_result.state == "PENDING":
+            response["message"] = "Task is waiting to be processed"
+        elif task_result.state == "STARTED":
+            response["message"] = "Task is currently being processed"
+        
+        return response
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching task status: {str(e)}")
+
+
 @router.get("/results")
-async def get_results(user_id: int):
+async def get_results(user_id: int = None, history_id: int = None):
+    """
+    Get conversion results.
+    
+    Args:
+        user_id: User ID (fetches latest result for user)
+        history_id: Specific history record ID (preferred for accurate results)
+        
+    Returns:
+        Conversion results including doc_url, JSON data, and image
+    """
     from app.core.database import SessionLocal
     from app.models.history import History
 
+    if not user_id and not history_id:
+        raise HTTPException(status_code=400, detail="Either user_id or history_id must be provided")
+
     db = SessionLocal()
     try:
-        latest = (
-            db.query(History)
-            .filter(History.user_id == user_id)
-            .order_by(History.id.desc())
-            .first()
-        )
+        if history_id:
+            # Fetch by specific history_id (accurate)
+            result = db.query(History).filter(History.id == history_id).first()
+        else:
+            # Fallback to latest for user (may be inaccurate if multiple conversions)
+            result = (
+                db.query(History)
+                .filter(History.user_id == user_id)
+                .order_by(History.id.desc())
+                .first()
+            )
     finally:
         db.close()
 
-    if not latest:
+    if not result:
         raise HTTPException(status_code=404, detail="Result not found")
 
-    gemini_json, converted_json = latest.gemini_data, latest.converted_data
+    gemini_json, converted_json = result.gemini_data, result.converted_data
 
     return {
         "status": "done",
-        "converted_image": f"data:image/png;base64,{latest.image_base64}",
-        "doc_url": latest.doc_url,
+        "converted_image": f"data:image/png;base64,{result.image_base64}",
+        "doc_url": result.doc_url,
         "gemini_json": gemini_json,
         "converted_json": converted_json,
     }

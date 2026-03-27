@@ -1,5 +1,5 @@
 import base64
-from app.core.database import SessionLocal
+from app.core.database import SessionLocal, engine
 from app.models.history import History, HistoryType
 from app.models.user import User
 
@@ -22,6 +22,9 @@ def save_history(
         gemini_json: Optional Gemini JSON data to attach.
         converted_json: Optional converted JSON data to attach.
     """
+    if engine is None:
+        raise RuntimeError("DATABASE_URL is not configured")
+
     image_base64_str = base64.b64encode(image_bytes).decode("utf-8")
     db = SessionLocal()
 

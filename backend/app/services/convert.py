@@ -13,10 +13,18 @@ from PIL import Image
 
 import google.genai as genai
 from google.genai import types
-from onshape_client.client import Client
 from app.services.to_db import save_history
 
+# Cache for config to avoid reloading
+_CONFIG_CACHE = None
+
 def load_config() -> dict:
+    """Load configuration from environment variables (lazy-loaded and cached)."""
+    global _CONFIG_CACHE
+    
+    if _CONFIG_CACHE is not None:
+        return _CONFIG_CACHE
+    
     load_dotenv()
 
     config = {
@@ -31,6 +39,7 @@ def load_config() -> dict:
     if missing:
         raise EnvironmentError(f"Missing required environment variables for keys: {missing}")
 
+    _CONFIG_CACHE = config
     return config
 
 

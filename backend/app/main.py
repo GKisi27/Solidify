@@ -20,6 +20,10 @@ def startup_event():
     from app.services.cost_estimator import _ensure_kb
     from app.core.database import Base, engine
     import app.models
+
+    if engine is None:
+        raise RuntimeError("DATABASE_URL is not configured")
+
     Base.metadata.create_all(bind=engine)
     # Initialize knowledge base or other services
     _ensure_kb()

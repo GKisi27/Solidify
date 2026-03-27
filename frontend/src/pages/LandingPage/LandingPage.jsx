@@ -169,10 +169,7 @@ const LandingPage = () => {
 
 			abortControllerRef.current = new AbortController();
 
-			const progressInterval = setInterval(() => {
-				setProgress((prev) => (prev < 85 ? prev + 5 : prev));
-			}, 400);
-
+			// Submit conversion job
 			const convertRes = await fetch(`${API_BASE}/convert`, {
 				method: 'POST',
 				body: formData,
@@ -180,44 +177,115 @@ const LandingPage = () => {
 				signal: abortControllerRef.current.signal,
 			});
 
-			clearInterval(progressInterval);
-
 			if (!convertRes.ok) {
 				const errData = await convertRes.json();
 				throw new Error(errData.detail || 'Conversion failed');
 			}
 
 			const convertData = await convertRes.json();
-			const userId = localStorage.getItem('user_id');
-			setProgress(90);
+			
+			// Check if using Celery or ThreadPoolExecutor
+			if (convertData.backend === 'celery' && convertData.task_id) {
+				// Poll task status until complete
+				const taskId = convertData.task_id;
+				let taskComplete = false;
+				let historyId = null;
+				
+				setProgress(30);
+				
+				while (!taskComplete) {
+					await new Promise(resolve => setTimeout(resolve, 2000)); // Poll every 2 seconds
+					
+					const statusRes = await fetch(
+						`${API_BASE}/task/${taskId}`,
+						{ headers: { Authorization: `Bearer ${token}` } }
+					);
+					
+					if (!statusRes.ok) {
+						throw new Error('Failed to check task status');
+					}
+					
+					const statusData = await statusRes.json();
+					
+					// Update progress based on status
+					if (statusData.status === 'PENDING') {
+						setProgress(35);
+					} else if (statusData.status === 'STARTED') {
+						setProgress(50);
+					} else if (statusData.ready) {
+						taskComplete = true;
+						
+						if (statusData.success && statusData.history_id) {
+							historyId = statusData.history_id;
+							setProgress(90);
+						} else {
+							throw new Error(statusData.error || 'Conversion failed');
+						}
+					}
+				}
+				
+				// Fetch results using history_id
+				const resultsRes = await fetch(
+					`${API_BASE}/results?history_id=${historyId}`,
+					{ headers: { Authorization: `Bearer ${token}` } }
+				);
 
-			const resultsRes = await fetch(
-				`${API_BASE}/results?user_id=${userId}`,
-				{ headers: { Authorization: `Bearer ${token}` } },
-			);
+				if (!resultsRes.ok)
+					throw new Error('Failed to fetch conversion results');
 
-			if (!resultsRes.ok)
-				throw new Error('Failed to fetch conversion results');
+				const resultsData = await resultsRes.json();
 
-			const resultsData = await resultsRes.json();
+				if (resultsData.status !== 'done')
+					throw new Error('Conversion not ready yet. Please try again.');
 
-			if (resultsData.status !== 'done')
-				throw new Error('Conversion not ready yet. Please try again.');
+				setProgress(100);
+				addToHistory(selectedFile, 'convert', selectedImage);
 
-			setProgress(100);
-			addToHistory(selectedFile, 'convert', selectedImage);
+				setTimeout(() => {
+					setProcessingOpen(false);
+					navigate('/results', {
+						state: {
+							convertedImage: resultsData.converted_image,
+							docUrl: resultsData.doc_url,
+							geminiJson: resultsData.gemini_json,
+							convertedJson: resultsData.converted_json,
+						},
+					});
+				}, 800);
+				
+			} else {
+				// ThreadPoolExecutor mode - direct result
+				const userId = localStorage.getItem('user_id');
+				setProgress(90);
 
-			setTimeout(() => {
-				setProcessingOpen(false);
-				navigate('/results', {
-					state: {
-						convertedImage: resultsData.converted_image,
-						docUrl: resultsData.doc_url,
-						geminiJson: resultsData.gemini_json,
-						convertedJson: resultsData.converted_json,
-					},
-				});
-			}, 800);
+				const resultsRes = await fetch(
+					`${API_BASE}/results?user_id=${userId}`,
+					{ headers: { Authorization: `Bearer ${token}` } }
+				);
+
+				if (!resultsRes.ok)
+					throw new Error('Failed to fetch conversion results');
+
+				const resultsData = await resultsRes.json();
+
+				if (resultsData.status !== 'done')
+					throw new Error('Conversion not ready yet. Please try again.');
+
+				setProgress(100);
+				addToHistory(selectedFile, 'convert', selectedImage);
+
+				setTimeout(() => {
+					setProcessingOpen(false);
+					navigate('/results', {
+						state: {
+							convertedImage: resultsData.converted_image,
+							docUrl: resultsData.doc_url,
+							geminiJson: resultsData.gemini_json,
+							convertedJson: resultsData.converted_json,
+						},
+					});
+				}, 800);
+			}
 		} catch (err) {
 			if (err.name === 'AbortError') {
 				setError('Conversion cancelled');

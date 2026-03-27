@@ -1,0 +1,21 @@
+# Worker Dependencies
+# These are the minimal dependencies needed to run Celery worker locally
+# For full functionality, install backend/requirements.txt
+
+# Core Celery
+celery==5.3.4
+kombu==5.3.4
+redis==7.2.0
+flower==2.0.1
+
+# Configuration
+python-dotenv==1.2.1
+
+# Note: For full task functionality, also install:
+# cd backend && pip install -r requirements.txt
+# 
+# This includes:
+# - google-genai (for Gemini AI)
+# - onshape-client (for OnShape API)
+# - Pillow (for image processing)
+# - And other backend dependencies
