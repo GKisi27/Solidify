@@ -36,9 +36,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: celery_worker
-    command: celery -A worker.celery_app worker --autoscale=8,4 --loglevel=info
-    deploy:
-      replicas: 2  # Run 2 containers
+    command: celery -A worker.celery_app worker --concurrency=4 --loglevel=info
     depends_on:
       - redis
       - postgres
