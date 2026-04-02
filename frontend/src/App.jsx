@@ -67,7 +67,9 @@ function App() {
 					}
 				/>
 
-				<Route
+				{/* Commented for cost estimation */}
+
+				{/* <Route
 					path='/cost-estimation'
 					element={
 						<ProtectedRoute>
@@ -91,7 +93,7 @@ function App() {
 							</>
 						</ProtectedRoute>
 					}
-				/>
+				/> */}
 			</Routes>
 		</Router>
 	);

@@ -1,0 +1,48 @@
+services:
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./backend:/app
+      - ./data:/solidify/data
+      - ./worker:/worker
+    environment:
+      DEBUG: "true"
+
+  celery_worker:
+    volumes:
+      - ./backend:/app
+      - ./data:/solidify/data
+      - ./worker:/worker
+
+  flower:
+    volumes:
+      - ./backend:/app
+      - ./data:/solidify/data
+      - ./worker:/worker
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+
+  postgres:
+    ports:
+      - "5433:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  qdrant:
+    ports:
+      - "6333:6333"

@@ -5,15 +5,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# install dependencies first (better docker layer caching)
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# copy source code
-COPY . .
-
+# no COPY . . here because we mount local folder via volumes
 EXPOSE 8000
 
-# 4 workers for prod, no --reload
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# --reload watches file changes instantly
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

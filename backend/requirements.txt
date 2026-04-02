@@ -91,3 +91,6 @@ websockets==15.0.1
 yarl>=1.9
 xxhash>=3.6
 zstandard==0.25.0
+pydantic-settings
+passlib[bcrypt]
+bcrypt==4.0.1

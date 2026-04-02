@@ -502,6 +502,7 @@ class TopologyParser:
         self.analysis = GeometryAnalysis()
 
     def parse(self) -> GeometryAnalysis:
+        print(self.views)
         for view in self.views:
             if not isinstance(view, dict):
                 continue

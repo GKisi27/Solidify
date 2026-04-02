@@ -90,8 +90,8 @@ const HistorySidebar = ({ userId: userIdProp, onItemClick }) => {
 			<div className='flex gap-2 px-4 py-2 border-b border-gray-100'>
 				{[
 					{ key: 'all', label: 'All' },
-					{ key: 'convert', label: 'Converted' },
-					{ key: 'estimate', label: 'Estimates' },
+					// { key: 'convert', label: 'Converted' },
+					// { key: 'estimate', label: 'Estimates' },
 				].map(({ key, label }) => (
 					<button
 						key={key}

@@ -123,9 +123,9 @@ async def estimate(
                     "process": r.process_name,
                     "material": r.material_name,
                     "quantity": r.quantity,
-                    "processing_cost_usd": r.processing_cost,
-                    "total_cost_usd": r.total_cost,
-                    "cost_per_unit_usd": r.cost_per_unit,
+                    "processing_cost_usd": round(r.processing_cost, 4),
+                    "total_cost_usd": round(r.total_cost, 4),
+                    "cost_per_unit_usd": round(r.cost_per_unit, 4),
                     "processing_time_min": r.processing_time,
                     "lead_time": r.lead_time,
                 }

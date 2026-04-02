@@ -1,13 +1,12 @@
-FROM node:20 AS build 
+FROM node:20
 
-WORKDIR /app 
+WORKDIR /app
 
-COPY package.json package-lock.json ./ 
-
+COPY package.json package-lock.json ./
 RUN npm install
 
-COPY . . 
+# no COPY . . here because we mount local folder via volumes
 
-EXPOSE 5173 
+EXPOSE 5173
 
 CMD ["npm", "run", "dev", "--", "--host"]

@@ -26,16 +26,12 @@ export default function Login() {
 		}
 
 		try {
-			const formData = new URLSearchParams();
-			formData.append('username', username);
-			formData.append('password', password);
-
 			const response = await axios.post(
 				'http://localhost:8000/auth/login',
-				formData.toString(),
+				{ username, password }, // ✅ send as JSON
 				{
 					headers: {
-						'Content-Type': 'application/x-www-form-urlencoded',
+						'Content-Type': 'application/json', // ✅ JSON header
 					},
 				},
 			);
@@ -59,8 +55,6 @@ export default function Login() {
 				setError('Network error');
 			}
 		}
-    
-
 	};
 
 	return (

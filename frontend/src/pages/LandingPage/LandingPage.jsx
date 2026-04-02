@@ -20,7 +20,6 @@ import { RxCountdownTimer } from 'react-icons/rx';
 import { TbStack } from 'react-icons/tb';
 import HistorySidebar from '../History/history_bar';
 
-
 const API_BASE = 'http://localhost:8000/files';
 
 const LandingPage = () => {
@@ -37,63 +36,8 @@ const LandingPage = () => {
 	const [processingMode, setProcessingMode] = useState(null);
 
 	// History state lifted here so we can push new entries from LandingPage
-	const [conversionHistory, setConversionHistory] = useState([
-		{
-			id: 1,
-			name: 'bracket_design.png',
-			time: '2 min ago',
-			type: 'convert',
-			size: '2.3 MB',
-			cost: '$0.12',
-			thumb: null,
-		},
-		{
-			id: 2,
-			name: 'gear_assembly.png',
-			time: '18 min ago',
-			type: 'estimate',
-			size: '4.1 MB',
-			cost: '$0.24',
-			thumb: null,
-		},
-		{
-			id: 3,
-			name: 'housing_v2.jpeg',
-			time: '1 hr ago',
-			type: 'convert',
-			size: '1.8 MB',
-			cost: '$0.09',
-			thumb: null,
-		},
-		{
-			id: 4,
-			name: 'shaft_connector.png',
-			time: '3 hrs ago',
-			type: 'convert',
-			size: '3.2 MB',
-			cost: '$0.15',
-			thumb: null,
-		},
-		{
-			id: 5,
-			name: 'panel_layout.jpeg',
-			time: 'Yesterday',
-			type: 'estimate',
-			size: '5.6 MB',
-			cost: '$0.31',
-			thumb: null,
-		},
-		{
-			id: 6,
-			name: 'cover_plate_v1.png',
-			time: 'Yesterday',
-			type: 'convert',
-			size: '2.0 MB',
-			cost: '$0.11',
-			thumb: null,
-		},
-	]);
-	const historyIdRef = useRef(7);
+	const [conversionHistory, setConversionHistory] = useState([]);
+	const historyIdRef = useRef(1);
 
 	const addToHistory = (file, type, thumb) => {
 		setConversionHistory((prev) => [
@@ -183,30 +127,30 @@ const LandingPage = () => {
 			}
 
 			const convertData = await convertRes.json();
-			
+
 			// Check if using Celery or ThreadPoolExecutor
 			if (convertData.backend === 'celery' && convertData.task_id) {
 				// Poll task status until complete
 				const taskId = convertData.task_id;
 				let taskComplete = false;
 				let historyId = null;
-				
+
 				setProgress(30);
-				
+
 				while (!taskComplete) {
-					await new Promise(resolve => setTimeout(resolve, 2000)); // Poll every 2 seconds
-					
+					await new Promise((resolve) => setTimeout(resolve, 2000)); // Poll every 2 seconds
+
 					const statusRes = await fetch(
 						`${API_BASE}/task/${taskId}`,
-						{ headers: { Authorization: `Bearer ${token}` } }
+						{ headers: { Authorization: `Bearer ${token}` } },
 					);
-					
+
 					if (!statusRes.ok) {
 						throw new Error('Failed to check task status');
 					}
-					
+
 					const statusData = await statusRes.json();
-					
+
 					// Update progress based on status
 					if (statusData.status === 'PENDING') {
 						setProgress(35);
@@ -214,20 +158,22 @@ const LandingPage = () => {
 						setProgress(50);
 					} else if (statusData.ready) {
 						taskComplete = true;
-						
+
 						if (statusData.success && statusData.history_id) {
 							historyId = statusData.history_id;
 							setProgress(90);
 						} else {
-							throw new Error(statusData.error || 'Conversion failed');
+							throw new Error(
+								statusData.error || 'Conversion failed',
+							);
 						}
 					}
 				}
-				
+
 				// Fetch results using history_id
 				const resultsRes = await fetch(
 					`${API_BASE}/results?history_id=${historyId}`,
-					{ headers: { Authorization: `Bearer ${token}` } }
+					{ headers: { Authorization: `Bearer ${token}` } },
 				);
 
 				if (!resultsRes.ok)
@@ -236,7 +182,9 @@ const LandingPage = () => {
 				const resultsData = await resultsRes.json();
 
 				if (resultsData.status !== 'done')
-					throw new Error('Conversion not ready yet. Please try again.');
+					throw new Error(
+						'Conversion not ready yet. Please try again.',
+					);
 
 				setProgress(100);
 				addToHistory(selectedFile, 'convert', selectedImage);
@@ -252,7 +200,6 @@ const LandingPage = () => {
 						},
 					});
 				}, 800);
-				
 			} else {
 				// ThreadPoolExecutor mode - direct result
 				const userId = localStorage.getItem('user_id');
@@ -260,7 +207,7 @@ const LandingPage = () => {
 
 				const resultsRes = await fetch(
 					`${API_BASE}/results?user_id=${userId}`,
-					{ headers: { Authorization: `Bearer ${token}` } }
+					{ headers: { Authorization: `Bearer ${token}` } },
 				);
 
 				if (!resultsRes.ok)
@@ -269,7 +216,9 @@ const LandingPage = () => {
 				const resultsData = await resultsRes.json();
 
 				if (resultsData.status !== 'done')
-					throw new Error('Conversion not ready yet. Please try again.');
+					throw new Error(
+						'Conversion not ready yet. Please try again.',
+					);
 
 				setProgress(100);
 				addToHistory(selectedFile, 'convert', selectedImage);
@@ -296,7 +245,6 @@ const LandingPage = () => {
 		}
 	};
 
-	
 	const handleHistoryClick = async (item) => {
 		if (item.type !== 'convert') return;
 
