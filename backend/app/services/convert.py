@@ -183,48 +183,6 @@ def _unit_vector(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return direction / norm if norm else np.zeros(2)
 
 
-def _arc_center(
-    start: np.ndarray,
-    end: np.ndarray,
-    radius: float,
-    prev_seg: dict | None,
-    next_seg: dict | None,
-) -> np.ndarray:
-    """
-    Compute the arc center that best satisfies tangency with adjacent segments.
-    Falls back to the chord midpoint when tangency cannot be resolved.
-    """
-    dx, dy = end - start
-    chord = math.hypot(dx, dy)
-
-    if chord == 0:
-        return start.copy()
-
-    h = math.sqrt(max(radius**2 - (chord / 2) ** 2, 0))
-    mid  = (start + end) / 2
-    perp = np.array([-dy, dx]) / chord
-
-    c1 = mid + h * perp
-    c2 = mid - h * perp
-
-    def tangency_score(center: np.ndarray, point: np.ndarray, seg: dict) -> float:
-        to_c = center - point
-        norm  = np.linalg.norm(to_c)
-        if norm == 0:
-            return 0.0
-        to_c /= norm
-        tangent   = np.array([-to_c[1], to_c[0]])
-        seg_start = np.array([seg["start_point"][0], seg["start_point"][1]])
-        seg_end   = np.array([seg["end_point"][0],   seg["end_point"][1]])
-        return abs(np.dot(tangent, _unit_vector(seg_start, seg_end)))
-
-    for seg, point in [(prev_seg, start), (next_seg, end)]:
-        if seg is not None and seg["type"] == "line":
-            return c1 if tangency_score(c1, point, seg) >= tangency_score(c2, point, seg) else c2
-
-    return c1
-
-
 def _cad_angle(point: np.ndarray, center: np.ndarray,clockwise:bool=True) -> float:
     """Compute the Onshape-convention angle (clockwise from +X) in degrees."""
     dx = point[0] - center[0]
@@ -239,8 +197,10 @@ def _cad_angle(point: np.ndarray, center: np.ndarray,clockwise:bool=True) -> flo
         angle_deg = -angle_deg
 
     # Normalize to [0, 360)
-    return angle_deg % 360
+    if angle_deg < 0:
+        angle_deg += 360
 
+    return angle_deg
 
 def _normalize_cw_angles(start: float, end: float) -> tuple[float, float]:
     """Ensure end > start for a clockwise arc sweep."""
