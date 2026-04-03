@@ -225,23 +225,27 @@ def _arc_center(
     return c1
 
 
-def _cad_angle(point: np.ndarray, center: np.ndarray) -> float:
+def _cad_angle(point: np.ndarray, center: np.ndarray,clockwise:bool=True) -> float:
     """Compute the Onshape-convention angle (clockwise from +X) in degrees."""
-    angle = math.degrees(math.atan2(point[1] - center[1], point[0] - center[0]))
-    return (-angle) % 360
+    dx = point[0] - center[0]
+    dy = point[1] - center[1]
 
+    # Standard atan2 (counterclockwise positive)
+    angle_rad = np.arctan2(dy, dx)
+    angle_deg = np.degrees(angle_rad)
 
-def _is_clockwise(start: np.ndarray, end: np.ndarray, center: np.ndarray) -> bool:
-    """Return True if the arc from *start* to *end* around *center* is clockwise."""
-    to_s = start - center
-    to_e = end   - center
-    return (to_s[0] * to_e[1] - to_s[1] * to_e[0]) < 0
+    if clockwise:
+        # CAD convention: negate to make clockwise positive
+        angle_deg = -angle_deg
+
+    # Normalize to [0, 360)
+    return angle_deg % 360
 
 
 def _normalize_cw_angles(start: float, end: float) -> tuple[float, float]:
     """Ensure end > start for a clockwise arc sweep."""
-    start %= 360
-    end   %= 360
+    start = start % 360
+    end = end % 360
     if end <= start:
         end += 360
     return start, end
@@ -263,6 +267,11 @@ def _intermediate_entity(raw: dict) -> dict:
             "start_point": [raw["start_x"], raw["start_y"]],
             "end_point":   [raw["end_x"],   raw["end_y"]],
             "radius":       raw["radius"],
+
+            # ADD THESE TWO LINES:
+            "center_x":     raw.get("center_x", 0.0),
+            "center_y":     raw.get("center_y", 0.0),
+            "clockwise":    raw.get("clockwise", True)
         }
     if kind == "CIRCLE":
         return {
@@ -298,21 +307,17 @@ def _convert_entity(entity: dict, idx: int, siblings: list[dict]) -> dict:
         }
 
     if kind == "arc":
-        prev_seg = siblings[idx - 1] if idx > 0 else None
-        next_seg = siblings[idx + 1] if idx < len(siblings) - 1 else None
-
+        # USE CENTER FROM LLM
+        center = np.array([entity["center_x"], entity["center_y"]])
         start  = np.array(entity["start_point"])
         end    = np.array(entity["end_point"])
-        center = _arc_center(start, end, entity["radius"], prev_seg, next_seg)
+        clockwise = entity.get("clockwise", True)
 
-        if np.isnan(center).any():
-            center = (start + end) / 2
-
-        if not _is_clockwise(start, end, center):
-            start, end = end, start
-
-        sa = _cad_angle(start, center)
-        ea = _cad_angle(end,   center)
+        # Calculate angles using your new logic
+        sa = _cad_angle(start, center, clockwise)
+        ea = _cad_angle(end,   center, clockwise)
+        
+        # Normalize angles
         sa, ea = _normalize_cw_angles(sa, ea)
 
         return {
@@ -322,7 +327,7 @@ def _convert_entity(entity: dict, idx: int, siblings: list[dict]) -> dict:
             "radius":      round(entity["radius"], 2),
             "start_angle": round(sa, 2),
             "end_angle":   round(ea, 2),
-            "clockwise":   True,
+            "clockwise":   clockwise,
         }
 
     raise ValueError(f"Unhandled intermediate entity type: {kind}")
