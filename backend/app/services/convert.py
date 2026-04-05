@@ -176,12 +176,6 @@ def call_gemini(
     except json.JSONDecodeError as exc:
         raise ValueError(f"Gemini returned non-JSON response: {exc}") from exc
 
-def _unit_vector(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """Return the unit direction vector from point *a* to point *b*."""
-    direction = b - a
-    norm = np.linalg.norm(direction)
-    return direction / norm if norm else np.zeros(2)
-
 
 def _cad_angle(point: np.ndarray, center: np.ndarray,clockwise:bool=True) -> float:
     """Compute the Onshape-convention angle (clockwise from +X) in degrees."""
@@ -200,7 +194,7 @@ def _cad_angle(point: np.ndarray, center: np.ndarray,clockwise:bool=True) -> flo
     if angle_deg < 0:
         angle_deg += 360
 
-    return angle_deg
+    return float(angle_deg)
 
 def _normalize_cw_angles(start: float, end: float) -> tuple[float, float]:
     """Ensure end > start for a clockwise arc sweep."""
@@ -282,9 +276,9 @@ def _convert_entity(entity: dict, idx: int, siblings: list[dict]) -> dict:
 
         return {
             "type":        "ARC",
-            "center_x":    round(center[0],        2),
-            "center_y":    round(center[1],        2),
-            "radius":      round(entity["radius"], 2),
+            "center_x":    round(float(center[0]),        2),
+            "center_y":    round(float(center[1]), 2),
+            "radius":      round(float(entity["radius"]), 2),
             "start_angle": round(sa, 2),
             "end_angle":   round(ea, 2),
             "clockwise":   clockwise,
