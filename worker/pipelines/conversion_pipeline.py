@@ -10,7 +10,7 @@ from worker.tasks import (
 )
 
 
-def run_conversion_pipeline(image_bytes: bytes, file_stem: str) -> chain:
+def run_conversion_pipeline(image_bytes: bytes, file_stem: str, user_id: int) -> chain:
     """
     Create and execute the full conversion pipeline.
     
@@ -23,22 +23,23 @@ def run_conversion_pipeline(image_bytes: bytes, file_stem: str) -> chain:
     Args:
         image_bytes: Raw bytes of the uploaded image
         file_stem: Filename stem for output files
+        user_id: ID of the user requesting the conversion
         
     Returns:
         Celery chain object that can be executed with .apply_async() or .delay()
         
     Usage:
-        >>> pipeline = run_conversion_pipeline(image_bytes, "bracket")
+        >>> pipeline = run_conversion_pipeline(image_bytes, "bracket", 1)
         >>> result = pipeline.apply_async()
         >>> task_id = result.id
     """
     # Create the pipeline chain with proper result passing
     # Each task returns a dict, and the next task unpacks it using **kwargs
     pipeline = (
-        process_image_task.s(image_bytes, file_stem) |
-        generate_json_task.s() |
-        clean_json_task.s() |
-        create_onshape_model_task.s()
+        process_image_task.s(image_bytes, file_stem, user_id) |
+        generate_json_task.s(user_id=user_id) |
+        clean_json_task.s(user_id=user_id) |
+        create_onshape_model_task.s(user_id=user_id)
     )
     
     return pipeline
@@ -47,6 +48,7 @@ def run_conversion_pipeline(image_bytes: bytes, file_stem: str) -> chain:
 def run_conversion_pipeline_with_callback(
     image_bytes: bytes,
     file_stem: str,
+    user_id: int,
     callback=None
 ) -> chain:
     """
@@ -55,12 +57,13 @@ def run_conversion_pipeline_with_callback(
     Args:
         image_bytes: Raw bytes of the uploaded image
         file_stem: Filename stem for output files
+        user_id: ID of the user requesting the conversion
         callback: Optional Celery task to execute after pipeline completes
         
     Returns:
         Celery chain with callback appended
     """
-    pipeline = run_conversion_pipeline(image_bytes, file_stem)
+    pipeline = run_conversion_pipeline(image_bytes, file_stem, user_id)
     
     if callback:
         pipeline = pipeline | callback
@@ -69,23 +72,24 @@ def run_conversion_pipeline_with_callback(
 
 
 # Convenience function for direct execution
-def convert_image_to_3d(image_bytes: bytes, file_stem: str):
+def convert_image_to_3d(image_bytes: bytes, file_stem: str, user_id: int):
     """
     Directly execute the conversion pipeline.
     
     Args:
         image_bytes: Raw bytes of the uploaded image
         file_stem: Filename stem for output files
+        user_id: ID of the user requesting the conversion
         
     Returns:
         AsyncResult: Celery task result that can be used to track progress
         
     Example:
-        >>> result = convert_image_to_3d(image_bytes, "bracket")
+        >>> result = convert_image_to_3d(image_bytes, "bracket", 1)
         >>> # Check if complete
         >>> result.ready()
         >>> # Get result (blocks until complete)
         >>> final_result = result.get()
     """
-    pipeline = run_conversion_pipeline(image_bytes, file_stem)
+    pipeline = run_conversion_pipeline(image_bytes, file_stem, user_id)
     return pipeline.apply_async()

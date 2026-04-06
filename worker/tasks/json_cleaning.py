@@ -7,7 +7,7 @@ from celery import shared_task
 
 from app.services.convert import (
     convert_json_format,
-    make_output_paths,
+    # make_output_paths,
 )
 
 
@@ -19,7 +19,8 @@ from app.services.convert import (
 )
 def clean_json_task(
     self,
-    previous_result: dict
+    previous_result: dict,
+    user_id: int = None
 ) -> dict:
     """
     Clean and validate the JSON output from Gemini.
@@ -45,32 +46,40 @@ def clean_json_task(
             "error": str (if success=False)
         }
     """
+        
+    print(f"Cleaning JSON for user_id={user_id}, file_stem={previous_result.get('file_stem')}")  # Debug log to inspect input data keys
+    # Propagate failure from previous task
+    if not previous_result.get("success", False):
+        return previous_result
+        
     try:
         # Extract data from previous task result
         gemini_json = previous_result["gemini_json"]
         file_stem = previous_result["file_stem"]
         image_bytes = previous_result["image_bytes"]
         part_type = previous_result["part_type"]
-        gemini_path = previous_result["gemini_path"]
+        # gemini_path = previous_result["gemini_path"]
+        user_id = previous_result.get("user_id", user_id)
         
         # Convert JSON format
         converted_json = convert_json_format(gemini_json)
         
         # Save converted JSON to file
-        _, converted_path = make_output_paths(file_stem)
-        converted_path.write_text(
-            json.dumps(converted_json, indent=2),
-            encoding="utf-8"
-        )
+        # _, converted_path = make_output_paths(file_stem)
+        # converted_path.write_text(
+        #     json.dumps(converted_json, indent=2),
+        #     encoding="utf-8"
+        # )
         
         return {
             "converted_json": converted_json,
-            "converted_path": str(converted_path),
+            # "converted_path": str(converted_path),
             "gemini_json": gemini_json,
-            "gemini_path": gemini_path,
+            # "gemini_path": gemini_path,
             "file_stem": file_stem,
             "image_bytes": image_bytes,
             "part_type": part_type,
+            "user_id": user_id,
             "success": True,
             "error": None,
         }

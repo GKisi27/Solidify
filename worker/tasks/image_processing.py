@@ -26,7 +26,8 @@ from app.services.convert import (
 def process_image_task(
     self,
     image_bytes: bytes,
-    file_stem: str
+    file_stem: str,
+    user_id: int
 ) -> dict:
     """
     Process an uploaded image and detect its part type.
@@ -43,6 +44,7 @@ def process_image_task(
             "error": str (if success=False)
         }
     """
+    print(f"Processing image for user_id={user_id}, file_stem={file_stem}")  # Debug log to check input data
     try:
         # Load configuration
         cfg = load_config()
@@ -66,6 +68,7 @@ def process_image_task(
             "part_type": part_type,
             "file_stem": file_stem,
             "image_bytes": image_bytes,  # Pass along for next task
+            "user_id": user_id,
             "success": True,
             "error": None,
         }
@@ -81,6 +84,7 @@ def process_image_task(
         return {
             "part_type": None,
             "file_stem": file_stem,
+            "user_id": user_id,
             "success": False,
             "error": error_msg,
         }

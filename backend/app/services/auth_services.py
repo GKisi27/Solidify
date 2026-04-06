@@ -13,7 +13,7 @@ def authenticate_user(username: str, password: str, db: Session) -> User | None:
     user = db.query(User).filter(User.username == username).first()
 
     # Always run verify_password even on missing user to prevent timing attacks
-    dummy_hash = "$2b$12$invalidhashfortimingattackprevention"
+    dummy_hash = "$2b$12$abcdefghijklmnopqrstuvABCDEFGHIJKLMNOPQRSTUVWXYZ12345"
     candidate_hash = user.password if user else dummy_hash
 
     if not verify_password(password, candidate_hash) or not user:

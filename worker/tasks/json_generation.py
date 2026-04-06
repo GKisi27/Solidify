@@ -14,7 +14,7 @@ from app.services.convert import (
     call_gemini,
     open_image,
     prepare_image,
-    make_output_paths,
+
 )
 
 
@@ -26,7 +26,8 @@ from app.services.convert import (
 )
 def generate_json_task(
     self,
-    previous_result: dict
+    previous_result: dict,
+    user_id: int = None
 ) -> dict:
     """
     Generate coordinate JSON from image using Gemini AI.
@@ -48,11 +49,13 @@ def generate_json_task(
             "error": str (if success=False)
         }
     """
+    print(f"json generation task received previous_result: {previous_result}")  # Debug log to inspect input data
     try:
         # Extract data from previous task result
         part_type = previous_result["part_type"]
         image_bytes = previous_result["image_bytes"]
         file_stem = previous_result["file_stem"]
+        user_id = previous_result.get("user_id", user_id)
         
         # Load configuration and prompt
         cfg = load_config()
@@ -74,18 +77,19 @@ def generate_json_task(
         )
         
         # Save JSON to file
-        gemini_path, _ = make_output_paths(file_stem)
-        gemini_path.write_text(
-            json.dumps(gemini_json, indent=2, ensure_ascii=False),
-            encoding="utf-8"
-        )
+        # gemini_path, _ = make_output_paths(file_stem)
+        # gemini_path.write_text(
+        #     json.dumps(gemini_json, indent=2, ensure_ascii=False),
+        #     encoding="utf-8"
+        # )
         
         return {
             "gemini_json": gemini_json,
-            "gemini_path": str(gemini_path),
+            # "gemini_path": str(gemini_path),
             "file_stem": file_stem,
             "image_bytes": image_bytes,
             "part_type": part_type,
+            "user_id": user_id,
             "success": True,
             "error": None,
         }
@@ -97,11 +101,14 @@ def generate_json_task(
         # Retry on transient errors
         if "API" in str(exc) or "connection" in str(exc).lower():
             raise self.retry(exc=exc, countdown=60)
-        
+            
         return {
             "gemini_json": None,
             "gemini_path": None,
             "file_stem": previous_result.get("file_stem"),
+            "image_bytes": previous_result.get("image_bytes"),
+            "part_type": previous_result.get("part_type"),
+            "user_id": user_id,
             "success": False,
             "error": error_msg,
         }

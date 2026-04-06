@@ -11,8 +11,7 @@ class Settings(BaseSettings):
     GEMINI_PAID_KEY: str
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        extra="ignore"  # ← this is what silences unknown keys
+        extra="ignore"
     )
 
 

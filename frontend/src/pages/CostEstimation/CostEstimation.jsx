@@ -104,7 +104,6 @@ const CostEstimation = () => {
 				body: formData,
 			});
 
-			console.log('Response status:', res);
 
 			if (!res.ok) {
 				const errData = await res.json();

@@ -1,111 +1,115 @@
 services:
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: backend
-    restart: unless-stopped
-    dns:
-      - 8.8.8.8
-    ports:
-      - "8000:8000"
-    depends_on:
-      redis:
-        condition: service_started
-      qdrant:
-        condition: service_healthy
-    environment:
-      # We add ?sslmode=require to help with Supabase connectivity
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=require
-      REDIS_HOST: redis
-      QDRANT_URL: http://qdrant:6333
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
-      PYTHONPATH: /app:/app/worker
-      GEMINI_PAID_KEY: ${GEMINI_PAID_KEY}
-      SECRET_KEY: ${SECRET_KEY}
-      access: ${access}
-      secret: ${secret}
-    volumes:
-      - ./data:/solidify/data
+    backend:
+        build:
+            context: .
+            dockerfile: backend/Dockerfile
+        container_name: backend
+        restart: unless-stopped
+        dns:
+            - 8.8.8.8
+        ports:
+            - '8000:8000'
+        depends_on:
+            redis:
+                condition: service_started
+            qdrant:
+                condition: service_started
+        environment:
+            # We add ?sslmode=require to help with Supabase connectivity
+            DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=require
+            REDIS_HOST: redis
+            QDRANT_URL: http://qdrant:6333
+            CELERY_BROKER_URL: redis://redis:6379/0
+            CELERY_RESULT_BACKEND: redis://redis:6379/0
+            PYTHONPATH: /app:/
+            GEMINI_PAID_KEY: ${GEMINI_PAID_KEY}
+            SECRET_KEY: ${SECRET_KEY}
+            access: ${access}
+            secret: ${secret}
+        volumes:
+            - ./data:/solidify/data
 
-  celery_worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: celery_worker
-    restart: unless-stopped
-    # Matching the folder structure seen in your logs
-    command: celery -A worker.celery_app worker --concurrency=4 --loglevel=info
-    depends_on:
-      - redis
-      - backend
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=require
-      REDIS_HOST: redis
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
-      PYTHONPATH: /app:/app/worker
-      GEMINI_PAID_KEY: ${GEMINI_PAID_KEY}
-      access: ${access}
-      secret: ${secret}
-    volumes:
-      - ./data:/solidify/data
+    celery_worker:
+        build:
+            context: .
+            dockerfile: backend/Dockerfile
+        container_name: celery_worker
+        restart: unless-stopped
+        # Matching the folder structure seen in your logs
+        command: celery -A worker.celery_app worker --concurrency=4 --loglevel=info
+        depends_on:
+            - redis
+            - backend
+        environment:
+            DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=require
+            REDIS_HOST: redis
+            CELERY_BROKER_URL: redis://redis:6379/0
+            CELERY_RESULT_BACKEND: redis://redis:6379/0
+            PYTHONPATH: /app:/
+            GEMINI_PAID_KEY: ${GEMINI_PAID_KEY}
+            SECRET_KEY: ${SECRET_KEY}
+            access: ${access}
+            secret: ${secret}
+        volumes:
+            - ./data:/solidify/data
 
-  flower:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: flower_monitor
-    command: sh -c "cd /app && celery -A worker.celery_app flower --port=5555"
-    ports:
-      - "5555:5555"
-    depends_on:
-      - redis
-      - celery_worker
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=require
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
-      PYTHONPATH: /app:/
-    volumes:
-      - ./backend:/app
-      - ./data:/solidify/data
-      - ./worker:/worker
-    restart: unless-stopped
+    flower:
+        build:
+            context: .
+            dockerfile: backend/Dockerfile
+        container_name: flower_monitor
+        command: sh -c "cd /app && celery -A worker.celery_app flower --port=5555"
+        ports:
+            - '5555:5555'
+        depends_on:
+            - redis
+            - celery_worker
+        environment:
+            DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=require
+            CELERY_BROKER_URL: redis://redis:6379/0
+            CELERY_RESULT_BACKEND: redis://redis:6379/1
+            PYTHONPATH: /app:/
+            SECRET_KEY: ${SECRET_KEY}
+            GEMINI_PAID_KEY: ${GEMINI_PAID_KEY}
+        volumes:
+            - ./backend:/app
+            - ./data:/solidify/data
+            - ./worker:/worker
+        restart: unless-stopped
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: frontend
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
+    frontend:
+        build:
+            context: ./frontend
+            dockerfile: Dockerfile
+        container_name: frontend
+        restart: unless-stopped
+        ports:
+            - '80:80'
+        depends_on:
+            - backend
 
-  redis:
-    image: redis:7-alpine
-    container_name: redis_cache
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
+    redis:
+        image: redis:7-alpine
+        container_name: redis_cache
+        restart: unless-stopped
+        ports:
+            - '6379:6379'
 
-  qdrant:
-    image: qdrant/qdrant:v1.13.0
-    container_name: qdrant_vector_db
-    restart: unless-stopped
-    ports:
-      - "6333:6333"
-    volumes:
-      - qdrant_storage:/qdrant/storage
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
-      start_period: 20s
+    qdrant:
+        image: qdrant/qdrant:v1.13.0
+        container_name: qdrant_vector_db
+        restart: unless-stopped
+        ports:
+            - '6333:6333'
+        volumes:
+            - qdrant_storage:/qdrant/storage
+        healthcheck:
+            test:
+                ['CMD-SHELL', 'curl -f http://localhost:6333/healthz || exit 1']
+            interval: 10s
+            timeout: 10s
+            retries: 5
+            start_period: 20s
 
 volumes:
-  qdrant_storage:
+    qdrant_storage:

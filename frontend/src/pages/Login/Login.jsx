@@ -1,13 +1,72 @@
-import React from 'react';
+import React, { useState } from 'react';
 import './Login.scss';
 import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
-import Navbar from '../../components/Navbar/Navbar';
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+
+// Axios instance with interceptors for auto-refresh
+const api = axios.create({
+	baseURL: 'http://localhost:8000',
+});
+
+// Add access token to requests
+api.interceptors.request.use((config) => {
+	const token = localStorage.getItem('access_token');
+	if (token) config.headers['Authorization'] = `Bearer ${token}`;
+	return config;
+});
+
+// Handle 401 errors by refreshing access token
+api.interceptors.response.use(
+	(response) => response,
+	async (error) => {
+		const originalRequest = error.config;
+
+		if (
+			error.response &&
+			error.response.status === 401 &&
+			!originalRequest._retry
+		) {
+			originalRequest._retry = true;
+			const refreshToken = localStorage.getItem('refresh_token');
+
+			if (refreshToken) {
+				try {
+					const res = await axios.post(
+						'http://localhost:8000/auth/refresh',
+						{
+							refresh_token: refreshToken,
+						},
+					);
+
+					localStorage.setItem('access_token', res.data.access_token);
+					localStorage.setItem(
+						'refresh_token',
+						res.data.refresh_token,
+					); // rotate refresh token
+
+					originalRequest.headers['Authorization'] =
+						'Bearer ' + res.data.access_token;
+					return axios(originalRequest); // retry original request
+				} catch (err) {
+					// Refresh token expired or invalid → log out
+					localStorage.clear();
+					window.location.href = '/login';
+					return Promise.reject(err);
+				}
+			} else {
+				// No refresh token → log out
+				localStorage.clear();
+				window.location.href = '/login';
+			}
+		}
+
+		return Promise.reject(error);
+	},
+);
 
 export default function Login() {
 	const navigate = useNavigate();
@@ -26,20 +85,28 @@ export default function Login() {
 		}
 
 		try {
-			const response = await axios.post(
-				'http://localhost:8000/auth/login',
-				{ username, password }, // ✅ send as JSON
+			const response = await api.post(
+				'/auth/login',
+				new URLSearchParams({ username, password }),
 				{
 					headers: {
-						'Content-Type': 'application/json', // ✅ JSON header
+						'Content-Type': 'application/x-www-form-urlencoded',
 					},
 				},
 			);
 
-			if (response.data.access_token) {
-				localStorage.setItem('token', response.data.access_token);
-				localStorage.setItem('username', response.data.username);
-				localStorage.setItem('user_id', response.data.user_id);
+			const {
+				access_token,
+				refresh_token,
+				user_id,
+				username: user,
+			} = response.data;
+
+			if (access_token && refresh_token) {
+				localStorage.setItem('access_token', access_token);
+				localStorage.setItem('refresh_token', refresh_token);
+				localStorage.setItem('username', user);
+				localStorage.setItem('user_id', user_id);
 				navigate('/');
 			} else {
 				setError('Invalid credentials');
@@ -73,7 +140,7 @@ export default function Login() {
 								<PersonOutlineOutlinedIcon
 									className='person'
 									fontSize='medium'
-								></PersonOutlineOutlinedIcon>
+								/>
 								<input
 									type='text'
 									placeholder='Enter your username'
@@ -82,7 +149,7 @@ export default function Login() {
 									onChange={(e) =>
 										setUsername(e.target.value)
 									}
-								></input>
+								/>
 							</div>
 						</div>
 
@@ -92,7 +159,7 @@ export default function Login() {
 								<LockOutlinedIcon
 									className='lock'
 									fontSize='medium'
-								></LockOutlinedIcon>
+								/>
 								<input
 									type={showpassword ? 'text' : 'password'}
 									placeholder='Password'
@@ -101,7 +168,7 @@ export default function Login() {
 									onChange={(e) =>
 										setPassword(e.target.value)
 									}
-								></input>
+								/>
 								<span
 									className='eye'
 									onClick={() =>

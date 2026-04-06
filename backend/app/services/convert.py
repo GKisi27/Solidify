@@ -68,33 +68,33 @@ def sanitize_name(name: str) -> str:
     return "".join(c for c in name if c.isalnum() or c in ("-", "_"))
 
 
-def make_output_paths(file_stem: str, output_dir: str | None = None) -> tuple[Path, Path]:
-    file_name_only = Path(file_stem).stem
-    data_dir = os.getenv("DATA_DIR")
+# path for files if we want to save them locally
+# def make_output_paths(file_stem: str, output_dir: str | None = None) -> tuple[Path, Path]:
+#     file_name_only = Path(file_stem).stem
+#     data_dir = os.getenv("DATA_DIR")
 
-    if output_dir:
-        base = Path(output_dir)
-    elif data_dir:
-        base = Path(data_dir) / file_name_only
-    else:
-        current_folder = Path(__file__).resolve().parent
-        base_project_folder = current_folder
-        while base_project_folder.name != "Solidify":
-            if base_project_folder.parent == base_project_folder:
-                raise FileNotFoundError("Could not find 'Solidify' folder in parent hierarchy")
-            base_project_folder = base_project_folder.parent
-        base = base_project_folder / "data" / file_name_only
+#     if output_dir:
+#         base = Path(output_dir)
+#     elif data_dir:
+#         base = Path(data_dir) / file_name_only
+#     elif Path("/solidify/data").exists():
+#         base = Path("/solidify/data") / file_name_only
+#     else:
+#         current_folder = Path(__file__).resolve().parent
+#         # Go up: services -> app -> backend -> Solidify
+#         base_project_folder = current_folder.parent.parent.parent
+#         base = base_project_folder / "data" / file_name_only
 
-    base.mkdir(parents=True, exist_ok=True)
+#     base.mkdir(parents=True, exist_ok=True)
 
-    safe = sanitize_name(file_name_only)
-    gemini_path    = base / f"{safe}_gemini.json"
-    converted_path = base / f"{safe}_converted.json"
+#     safe = sanitize_name(file_name_only)
+#     gemini_path    = base / f"{safe}_gemini.json"
+#     converted_path = base / f"{safe}_converted.json"
 
-    gemini_path.touch(exist_ok=True)
-    converted_path.touch(exist_ok=True)
+#     gemini_path.touch(exist_ok=True)
+#     converted_path.touch(exist_ok=True)
 
-    return gemini_path, converted_path
+#     return gemini_path, converted_path
 
 def prepare_image(image: Image.Image) -> Image.Image:
     """Ensure the image is in RGB mode, converting if necessary."""
@@ -956,6 +956,7 @@ def convert_to_3d(
     file_stem: str,
     image_bytes: bytes,
     stop_event = None,
+    user_id: int = None,     
     *,
     output_dir: str | None = None,
 ) -> tuple[str, Path, Path]:
@@ -992,11 +993,11 @@ def convert_to_3d(
     gemini_json = call_gemini(image, prompt, gemini_client, model=cfg["gemini_model"])
     if cancelled():
         return None
-    gemini_path, converted_path = make_output_paths(file_stem, output_dir)
-    gemini_path.write_text(json.dumps(gemini_json, indent=2, ensure_ascii=False), encoding="utf-8")
+    # gemini_path, converted_path = make_output_paths(file_stem, output_dir)
+    # gemini_path.write_text(json.dumps(gemini_json, indent=2, ensure_ascii=False), encoding="utf-8")
 
     converted_json = convert_json_format(gemini_json)
-    converted_path.write_text(json.dumps(converted_json, indent=2), encoding="utf-8")
+    # converted_path.write_text(json.dumps(converted_json, indent=2), encoding="utf-8")
 
     if cancelled():
         return None
@@ -1014,9 +1015,16 @@ def convert_to_3d(
     else:
         session.build_plate(features_url, views)
 
-    print(gemini_path, converted_path)
+    # print(gemini_path, converted_path)
 
     doc_url = f"{cfg['onshape_base']}/documents/{did}/w/{wid}/e/{eid}"
-    save_history(image_bytes, file_stem, gemini_json=gemini_json, converted_json=converted_json, history_type="convert_to_3d", doc_url= doc_url)
-
-    return doc_url, gemini_path, converted_path
+    save_history(
+        image_bytes=image_bytes,
+        user_id=user_id,
+        filename=file_stem,
+        gemini_json=gemini_json,
+        converted_json=converted_json,
+        history_type="convert_to_3d",
+        doc_url=doc_url,
+    )
+    return doc_url

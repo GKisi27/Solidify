@@ -9,22 +9,24 @@ from app.core.security import create_access_token, decode_token
 from app.dependencies.auth import get_current_user
 from app.models.user import User
 from app.schemas import Users, RefreshRequest, TokenResponse
+from fastapi.security import OAuth2PasswordRequestForm
 from app.services.auth_services import authenticate_user, build_token_response
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/login", response_model=TokenResponse)
-def login(payload: Users, db: Session = Depends(get_db)):
-    user = authenticate_user(payload.username, payload.password, db)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
-        )
-    return build_token_response(user)
 
+@router.post("/login", response_model=TokenResponse)
+async def login(
+    db: Session = Depends(get_db),
+    # For Swagger UI (form data)
+    form_data: OAuth2PasswordRequestForm = Depends(),
+):
+    user = authenticate_user(form_data.username, form_data.password, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    return build_token_response(user)
 
 @router.post("/refresh", response_model=TokenResponse)
 def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):

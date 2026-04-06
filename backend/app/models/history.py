@@ -12,7 +12,7 @@ class History(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    type = Column(Enum(HistoryType), nullable=False)  
+    type = Column(Enum(HistoryType, native_enum=False, length=50), nullable=False)  
     filename = Column(String, nullable=False)
     doc_url = Column(String, nullable=True)
     image_base64 = Column(Text, nullable=False)                 

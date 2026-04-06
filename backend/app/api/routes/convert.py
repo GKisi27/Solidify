@@ -2,6 +2,7 @@ import asyncio
 import os
 import sys
 from pathlib import Path
+from app.dependencies.auth import get_current_user
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from app.models.user import User
 from app.services.convert import convert_to_3d
@@ -38,7 +39,11 @@ if USE_CELERY:
 
 
 @router.post("/convert")
-async def convert_to_3d_endpoint(request: Request, file: UploadFile = File(...)):
+async def convert_to_3d_endpoint(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),  # ← add this
+):
     """
     Convert a 2D image to a 3D CAD model.
     
@@ -50,12 +55,13 @@ async def convert_to_3d_endpoint(request: Request, file: UploadFile = File(...))
     """
     image_bytes = await file.read()
     image = Image.open(io.BytesIO(image_bytes))
+    print(f"Current user ID: {current_user.id}")  # Debug log to check user ID
     
     # Use Celery if available
     if celery_available:
         try:
             # Submit to Celery pipeline
-            result = convert_image_to_3d(image_bytes, file.filename)
+            result = convert_image_to_3d(image_bytes, file.filename, current_user.id)
             
             return {
                 "message": "Conversion started",
@@ -72,7 +78,7 @@ async def convert_to_3d_endpoint(request: Request, file: UploadFile = File(...))
     loop = asyncio.get_event_loop()
     stop_event = threading.Event()
 
-    future = loop.run_in_executor(executor, convert_to_3d, image, file.filename, image_bytes, stop_event)
+    future = loop.run_in_executor(executor, convert_to_3d, image, file.filename, image_bytes, stop_event, current_user.id)
     
     while not future.done():
         if await request.is_disconnected():

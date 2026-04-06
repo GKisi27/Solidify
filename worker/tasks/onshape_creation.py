@@ -20,7 +20,8 @@ from app.services.to_db import save_history
 )
 def create_onshape_model_task(
     self,
-    previous_result: dict
+    previous_result: dict,
+    user_id: int = None
 ) -> dict:
     """
     Create a 3D model in OnShape from the converted JSON.
@@ -48,6 +49,11 @@ def create_onshape_model_task(
             "error": str (if success=False)
         }
     """
+    
+    print(f" create_onshape_model_task = {user_id}")  # Debug log to inspect input data keys
+    if not previous_result.get("success", False):
+        return previous_result
+        
     try:
         # Extract data from previous task result
         converted_json = previous_result["converted_json"]
@@ -55,8 +61,9 @@ def create_onshape_model_task(
         file_stem = previous_result["file_stem"]
         image_bytes = previous_result["image_bytes"]
         part_type = previous_result["part_type"]
-        gemini_path = previous_result["gemini_path"]
-        converted_path = previous_result["converted_path"]
+        # gemini_path = previous_result["gemini_path"]
+        # converted_path = previous_result["converted_path"]
+        user_id = previous_result.get("user_id", user_id)
         
         # Load OnShape configuration
         cfg = load_config()
@@ -102,7 +109,8 @@ def create_onshape_model_task(
             gemini_json=gemini_json,
             converted_json=converted_json,
             history_type=HistoryType.convert_to_3d,
-            doc_url=doc_url
+            doc_url=doc_url,
+            user_id=user_id
         )
         
         return {
@@ -110,8 +118,8 @@ def create_onshape_model_task(
             "document_id": did,
             "workspace_id": wid,
             "element_id": eid,
-            "gemini_path": gemini_path,
-            "converted_path": converted_path,
+            # "gemini_path": gemini_path,
+            # "converted_path": converted_path,
             "history_id": history_entry.id,
             "success": True,
             "error": None,
@@ -130,8 +138,9 @@ def create_onshape_model_task(
             "document_id": None,
             "workspace_id": None,
             "element_id": None,
-            "gemini_path": previous_result.get("gemini_path"),
-            "converted_path": previous_result.get("converted_path"),
+            # "gemini_path": previous_result.get("gemini_path"),
+            # "converted_path": previous_result.get("converted_path"),
+            "user_id": user_id,
             "success": False,
             "error": error_msg,
         }
