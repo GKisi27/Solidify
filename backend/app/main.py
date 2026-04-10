@@ -32,9 +32,7 @@ def startup_event():
 @app.get("/")
 def root():
     return {
-        "message": "2D CAD Cost Estimator API is running",
+        "message": "2D CAD Cost Estimator and Conversion API is running",
         "docs": "/docs",
         "health": "/health",
-        "materials": "/materials",
-        "estimate": "POST /estimate"
     }

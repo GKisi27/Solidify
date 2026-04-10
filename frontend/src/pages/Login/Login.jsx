@@ -5,72 +5,14 @@ import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { storeAuthTokens } from '../../auth';
 
-// Axios instance with interceptors for auto-refresh
-const api = axios.create({
-	baseURL: 'http://localhost:8000',
-});
-
-// Add access token to requests
-api.interceptors.request.use((config) => {
-	const token = localStorage.getItem('access_token');
-	if (token) config.headers['Authorization'] = `Bearer ${token}`;
-	return config;
-});
-
-// Handle 401 errors by refreshing access token
-api.interceptors.response.use(
-	(response) => response,
-	async (error) => {
-		const originalRequest = error.config;
-
-		if (
-			error.response &&
-			error.response.status === 401 &&
-			!originalRequest._retry
-		) {
-			originalRequest._retry = true;
-			const refreshToken = localStorage.getItem('refresh_token');
-
-			if (refreshToken) {
-				try {
-					const res = await axios.post(
-						'http://localhost:8000/auth/refresh',
-						{
-							refresh_token: refreshToken,
-						},
-					);
-
-					localStorage.setItem('access_token', res.data.access_token);
-					localStorage.setItem(
-						'refresh_token',
-						res.data.refresh_token,
-					); // rotate refresh token
-
-					originalRequest.headers['Authorization'] =
-						'Bearer ' + res.data.access_token;
-					return axios(originalRequest); // retry original request
-				} catch (err) {
-					// Refresh token expired or invalid → log out
-					localStorage.clear();
-					window.location.href = '/login';
-					return Promise.reject(err);
-				}
-			} else {
-				// No refresh token → log out
-				localStorage.clear();
-				window.location.href = '/login';
-			}
-		}
-
-		return Promise.reject(error);
-	},
-);
+// Import the api instance you just created!
+// Make sure to adjust the path depending on where api.js is located relative to Login.jsx
+import api from '../../api';
 
 export default function Login() {
 	const navigate = useNavigate();
-
 	const [username, setUsername] = useState('');
 	const [password, setPassword] = useState('');
 	const [showpassword, setShowPassword] = useState(false);
@@ -78,13 +20,12 @@ export default function Login() {
 
 	const handleLogin = async (e) => {
 		e.preventDefault();
-
 		if (!username || !password) {
 			setError('Username and password are required!');
 			return;
 		}
-
 		try {
+			// Using the shared api instance
 			const response = await api.post(
 				'/auth/login',
 				new URLSearchParams({ username, password }),
@@ -103,21 +44,23 @@ export default function Login() {
 			} = response.data;
 
 			if (access_token && refresh_token) {
-				localStorage.setItem('access_token', access_token);
-				localStorage.setItem('refresh_token', refresh_token);
-				localStorage.setItem('username', user);
-				localStorage.setItem('user_id', user_id);
+				storeAuthTokens({
+					accessToken: access_token,
+					refreshToken: refresh_token,
+					username: user,
+					userId: user_id,
+				});
 				navigate('/');
 			} else {
 				setError('Invalid credentials');
 			}
 		} catch (err) {
 			if (err.response) {
-				if (err.response.status === 401) {
-					setError('Invalid username or password');
-				} else {
-					setError('Server error. Please try again later.');
-				}
+				setError(
+					err.response.status === 401
+						? 'Invalid username or password'
+						: 'Server error. Please try again later.',
+				);
 			} else {
 				setError('Network error');
 			}
@@ -131,7 +74,6 @@ export default function Login() {
 					<h2>Log in to Solidify</h2>
 					<span>Access your 3D conversion workplace.</span>
 				</div>
-
 				<form onSubmit={handleLogin}>
 					<div className='fields'>
 						<div className='username-field'>
@@ -145,6 +87,7 @@ export default function Login() {
 									type='text'
 									placeholder='Enter your username'
 									name='username'
+									autoComplete='username'
 									value={username}
 									onChange={(e) =>
 										setUsername(e.target.value)
@@ -152,7 +95,6 @@ export default function Login() {
 								/>
 							</div>
 						</div>
-
 						<div className='password'>
 							<label>Password</label>
 							<div className='password-input'>
@@ -164,6 +106,7 @@ export default function Login() {
 									type={showpassword ? 'text' : 'password'}
 									placeholder='Password'
 									name='password'
+									autoComplete='current-password'
 									value={password}
 									onChange={(e) =>
 										setPassword(e.target.value)
@@ -183,10 +126,8 @@ export default function Login() {
 								</span>
 							</div>
 							{error && <p style={{ color: 'red' }}>{error}</p>}
-							<span>Forgot Password?</span>
 						</div>
 					</div>
-
 					<button type='submit'>Login</button>
 				</form>
 			</div>

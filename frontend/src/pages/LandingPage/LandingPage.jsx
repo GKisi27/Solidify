@@ -20,7 +20,11 @@ import { RxCountdownTimer } from 'react-icons/rx';
 import { TbStack } from 'react-icons/tb';
 import HistorySidebar from '../History/history_bar';
 
-const API_BASE = 'http://localhost:8000/files';
+// Import your configured api instance!
+// Adjust the relative path based on your folder structure
+import api from '../../api';
+
+const API_BASE = '/files';
 
 const LandingPage = () => {
 	const navigate = useNavigate();
@@ -35,7 +39,6 @@ const LandingPage = () => {
 	const [error, setError] = useState(null);
 	const [processingMode, setProcessingMode] = useState(null);
 
-	// History state lifted here so we can push new entries from LandingPage
 	const [conversionHistory, setConversionHistory] = useState([]);
 	const historyIdRef = useRef(1);
 
@@ -103,9 +106,6 @@ const LandingPage = () => {
 		setError(null);
 
 		try {
-			const token = localStorage.getItem('token');
-			if (!token) throw new Error('You must be logged in to upload.');
-
 			const formData = new FormData();
 			formData.append('file', selectedFile);
 
@@ -113,24 +113,15 @@ const LandingPage = () => {
 
 			abortControllerRef.current = new AbortController();
 
-			// Submit conversion job
-			const convertRes = await fetch(`${API_BASE}/convert`, {
-				method: 'POST',
-				body: formData,
-				headers: { Authorization: `Bearer ${token}` },
+			// Submit conversion job using our API instance
+			const convertRes = await api.post(`${API_BASE}/convert`, formData, {
 				signal: abortControllerRef.current.signal,
 			});
 
-			if (!convertRes.ok) {
-				const errData = await convertRes.json();
-				throw new Error(errData.detail || 'Conversion failed');
-			}
-
-			const convertData = await convertRes.json();
+			const convertData = convertRes.data;
 
 			// Check if using Celery or ThreadPoolExecutor
 			if (convertData.backend === 'celery' && convertData.task_id) {
-				// Poll task status until complete
 				const taskId = convertData.task_id;
 				let taskComplete = false;
 				let historyId = null;
@@ -138,20 +129,13 @@ const LandingPage = () => {
 				setProgress(30);
 
 				while (!taskComplete) {
-					await new Promise((resolve) => setTimeout(resolve, 2000)); // Poll every 2 seconds
+					await new Promise((resolve) => setTimeout(resolve, 2000));
 
-					const statusRes = await fetch(
+					const statusRes = await api.get(
 						`${API_BASE}/task/${taskId}`,
-						{ headers: { Authorization: `Bearer ${token}` } },
 					);
+					const statusData = statusRes.data;
 
-					if (!statusRes.ok) {
-						throw new Error('Failed to check task status');
-					}
-
-					const statusData = await statusRes.json();
-
-					// Update progress based on status
 					if (statusData.status === 'PENDING') {
 						setProgress(35);
 					} else if (statusData.status === 'STARTED') {
@@ -170,16 +154,12 @@ const LandingPage = () => {
 					}
 				}
 
-				// Fetch results using history_id
-				const resultsRes = await fetch(
-					`${API_BASE}/results?history_id=${historyId}`,
-					{ headers: { Authorization: `Bearer ${token}` } },
-				);
+				// Fetch results using history_id via axios params
+				const resultsRes = await api.get(`${API_BASE}/results`, {
+					params: { history_id: historyId },
+				});
 
-				if (!resultsRes.ok)
-					throw new Error('Failed to fetch conversion results');
-
-				const resultsData = await resultsRes.json();
+				const resultsData = resultsRes.data;
 
 				if (resultsData.status !== 'done')
 					throw new Error(
@@ -205,15 +185,11 @@ const LandingPage = () => {
 				const userId = localStorage.getItem('user_id');
 				setProgress(90);
 
-				const resultsRes = await fetch(
-					`${API_BASE}/results?user_id=${userId}`,
-					{ headers: { Authorization: `Bearer ${token}` } },
-				);
+				const resultsRes = await api.get(`${API_BASE}/results`, {
+					params: { user_id: userId },
+				});
 
-				if (!resultsRes.ok)
-					throw new Error('Failed to fetch conversion results');
-
-				const resultsData = await resultsRes.json();
+				const resultsData = resultsRes.data;
 
 				if (resultsData.status !== 'done')
 					throw new Error(
@@ -236,10 +212,17 @@ const LandingPage = () => {
 				}, 800);
 			}
 		} catch (err) {
-			if (err.name === 'AbortError') {
+			// Axios throws a specific error name for cancelled requests
+			if (err.name === 'CanceledError') {
 				setError('Conversion cancelled');
 			} else {
-				setError(err.message || 'Something went wrong');
+				// Handle both Axios structure and generic errors
+				setError(
+					err.response?.data?.detail ||
+						err.response?.data?.error ||
+						err.message ||
+						'Something went wrong',
+				);
 			}
 			setProgress(0);
 		}
@@ -249,16 +232,9 @@ const LandingPage = () => {
 		if (item.type !== 'convert') return;
 
 		try {
-			const token = localStorage.getItem('token');
-			const res = await fetch(
-				`http://localhost:8000/history/${item.id}`,
-				{
-					headers: { Authorization: `Bearer ${token}` },
-				},
-			);
-			if (!res.ok) throw new Error('Failed to load history item');
+			const res = await api.get(`/history/${item.id}`);
+			const data = res.data;
 
-			const data = await res.json();
 			navigate('/results', {
 				state: {
 					convertedImage: data.converted_image,
@@ -352,15 +328,6 @@ const LandingPage = () => {
 				</div>
 
 				<div className='flex justify-center gap-5 mt-10'>
-					{/* <Button
-						// disabled={!selectedImage}
-						// onClick={handleCostEstimation}
-						className='flex gap-2 text-white text-[18px] font-bold justify-center items-center bg-[#135BEC] hover:bg-[#135BEC] px-7 py-3 rounded-xl shadow-lg shadow-[#135BEC] w-70 h-14 cursor-pointer'
-					>
-						<Money />
-						Cost Estimation
-					</Button> */}
-
 					<Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
 						<DialogTrigger asChild>
 							<Button

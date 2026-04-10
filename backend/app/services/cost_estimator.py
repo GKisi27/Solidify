@@ -44,6 +44,8 @@ from qdrant_client.models import PointStruct
 # ── Env ───────────────────────────────────────────────────────────────────
 load_dotenv()
 GEMINI_KEY = os.getenv("GEMINI_PAID_KEY")
+QDRANT_URL = os.getenv("QDRANT_URL")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 
 # ─────────────────────────────────────────────────────────────────────────
 # GLOBAL SINGLETONS  (initialised once at startup)
@@ -57,7 +59,7 @@ embeddings = GoogleGenerativeAIEmbeddings(
     model="gemini-embedding-001",
     api_key=GEMINI_KEY,
 )
-qdrant = QdrantClient(url=os.getenv("QDRANT_URL", "http://qdrant_vector_db:6333"), timeout=60)
+qdrant = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=60)
 
 # ─────────────────────────────────────────────────────────────────────────
 # KNOWLEDGE BASE  (uploaded to Qdrant once on first run)

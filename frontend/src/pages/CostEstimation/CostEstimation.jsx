@@ -7,12 +7,16 @@ import { MultiCombobox } from './MultiComboBox';
 import { Button } from '@/components/ui/button';
 import Droplet from './Droplet';
 
-const API_BASE = 'http://localhost:8000';
+// Import your configured api instance
+// Adjust the relative path based on your folder structure
+import api from '../../api';
+
+const API_BASE = '';
 
 const CostEstimation = () => {
 	const location = useLocation();
 	const navigate = useNavigate();
-	const imageFile = location.state?.file; 
+	const imageFile = location.state?.file;
 
 	const processes = [
 		{ label: 'Laser Cutting', value: 'Laser Cutting' },
@@ -99,21 +103,20 @@ const CostEstimation = () => {
 				if (wjRate) formData.append('wj_rate', wjRate);
 			}
 
-			const res = await fetch(`${API_BASE}/estimate`, {
-				method: 'POST',
-				body: formData,
-			});
+			// Using the 'api' instance instead of fetch
+			const res = await api.post(`${API_BASE}/estimate`, formData);
 
-
-			if (!res.ok) {
-				const errData = await res.json();
-				throw new Error(errData.detail || 'Estimation failed');
-			}
-
-			const data = await res.json();
+			// Axios automatically parses the JSON response into 'data'
+			const data = res.data;
 			navigate('/estimate-results', { state: { results: data } });
 		} catch (err) {
-			setError(err.message || 'Something went wrong');
+			// Extract specific backend error messages if available
+			setError(
+				err.response?.data?.detail ||
+					err.response?.data?.error ||
+					err.message ||
+					'Something went wrong',
+			);
 		} finally {
 			setLoading(false);
 		}
@@ -133,7 +136,7 @@ const CostEstimation = () => {
 					quote.
 				</div>
 
-				{!imageFile && ( 
+				{!imageFile && (
 					<div className='mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-yellow-800 text-[14px]'>
 						No image uploaded. Please go back to the home page and
 						upload an image first.
@@ -374,7 +377,7 @@ const CostEstimation = () => {
 					<div className='pt-10 flex justify-center items-center'>
 						<Button
 							onClick={handleSubmit}
-							disabled={loading || !imageFile} 
+							disabled={loading || !imageFile}
 							className='bg-[#135BEC] text-white text-[18px] font-bold p-7 hover:cursor-pointer hover:bg-[#135BEC] disabled:opacity-50'
 						>
 							{loading ? 'Generating...' : 'Generate Estimates'}

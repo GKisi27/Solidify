@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
 
+// Import your configured api instance!
+// Adjust the relative path based on your folder structure
+import api from '../../api';
+
 const ImageIcon = () => (
 	<svg
 		width='18'
@@ -52,17 +56,21 @@ const HistorySidebar = ({ userId: userIdProp, onItemClick }) => {
 			setLoading(true);
 			setError(null);
 			try {
-				const token = localStorage.getItem('token');
-				const res = await fetch(
-					`http://localhost:8000/history/user/${userId}`,
-					{ headers: { Authorization: `Bearer ${token}` } },
-				);
-				if (!res.ok) throw new Error(`Server error: ${res.status}`);
-				const data = await res.json();
-				if (!cancelled) setHistory(data.map(mapEntry));
+				// We use the api instance.
+				// Since baseURL is '/api', we just call '/history/user/...'
+				const res = await api.get(`/history/user/${userId}`);
+
+				if (!cancelled) setHistory(res.data.map(mapEntry));
 			} catch (err) {
-				if (!cancelled)
-					setError(err.message ?? 'Failed to load history');
+				if (!cancelled) {
+					// Handle specific Axios errors or fallback to message
+					setError(
+						err.response?.data?.detail ||
+							err.response?.data?.error ||
+							err.message ||
+							'Failed to load history',
+					);
+				}
 			} finally {
 				if (!cancelled) setLoading(false);
 			}

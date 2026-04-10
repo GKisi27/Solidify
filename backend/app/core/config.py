@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
 
 
 class Settings(BaseSettings):
@@ -11,7 +12,9 @@ class Settings(BaseSettings):
     GEMINI_PAID_KEY: str
 
     model_config = SettingsConfigDict(
-        extra="ignore"
+        extra="ignore",  # ignore unknown fields
+        env_file=str(Path(__file__).parent / ".env"),
+        env_file_encoding="utf-8"
     )
 
 

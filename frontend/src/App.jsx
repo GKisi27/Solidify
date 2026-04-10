@@ -6,7 +6,7 @@ import CostEstimation from './pages/CostEstimation/CostEstimation';
 import Login from './pages/Login/Login';
 import Result from './pages/Result/Result';
 import EstimateResults from './pages/Estimateresult/estimate_result';
-import { isTokenExpired } from './auth';
+import { getStoredAccessToken, isTokenExpired } from './auth';
 import {
 	BrowserRouter as Router,
 	Routes,
@@ -15,7 +15,7 @@ import {
 } from 'react-router-dom';
 
 function ProtectedRoute({ children }) {
-	const token = localStorage.getItem('token');
+	const token = getStoredAccessToken();
 
 	if (!token || isTokenExpired(token)) {
 		return <Navigate to='/login' replace />;
