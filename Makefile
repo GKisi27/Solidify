@@ -51,6 +51,9 @@ seed-users:
 build:
 	docker-compose build
 
+dev-build:
+	docker compose -f docker-compose.dev.yml up -d --build
+
 up:
 	docker-compose up -d
 	@echo ""

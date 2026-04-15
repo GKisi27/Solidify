@@ -1,7 +1,9 @@
 from functools import lru_cache
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# backend/app/core/config.py → go to project root
+BASE_DIR = Path(__file__).resolve().parents[3]
 
 class Settings(BaseSettings):
     SECRET_KEY: str
@@ -12,9 +14,9 @@ class Settings(BaseSettings):
     GEMINI_PAID_KEY: str
 
     model_config = SettingsConfigDict(
-        extra="ignore",  # ignore unknown fields
-        env_file=str(Path(__file__).parent / ".env"),
-        env_file_encoding="utf-8"
+        extra="ignore",
+        env_file=str(BASE_DIR / ".env.local"),
+        env_file_encoding="utf-8",
     )
 
 
