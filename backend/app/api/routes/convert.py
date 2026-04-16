@@ -104,6 +104,8 @@ async def convert_to_3d_endpoint(
         "backend": "threadpool",
     }
 
+# routes/files.py  — replace the DELETE and GET /task endpoints
+
 @router.delete("/task/{task_id}")
 async def stop_task(task_id: str):
     if not celery_available:
@@ -112,52 +114,53 @@ async def stop_task(task_id: str):
         from celery.result import AsyncResult
         from worker.celery_app import celery_app
 
-        request_cancellation(task_id)  # ← sets Redis flag
+        def revoke_chain(task_id: str):
+            """Revoke a task AND all its children (downstream chain tasks)."""
+            result = AsyncResult(task_id, app=celery_app)
+            celery_app.control.revoke(task_id, terminate=True, signal='SIGTERM')
 
-        result = AsyncResult(task_id, app=celery_app)
-        curr = result
-        while curr:
-            celery_app.control.revoke(curr.id, terminate=True, signal='SIGKILL')
-            curr = curr.parent
+            # Traverse children (downstream), not parent (upstream)
+            children = result.children
+            if children:
+                for child in children:
+                    revoke_chain(child.id)  # recurse into each child
 
-        return {"message": f"Cancellation requested for task {task_id}"}
+        revoke_chain(task_id)
+
+        return {"message": f"Task {task_id} and its chain have been cancelled"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to stop task: {str(e)}")
 
+
 @router.get("/task/{task_id}")
 async def get_task_status(task_id: str):
-    """
-    Get the status of a Celery task.
-    
-    Args:
-        task_id: The Celery task ID returned from /convert endpoint
-        
-    Returns:
-        Task status and result if complete
-    """
     if not celery_available:
-        raise HTTPException(
-            status_code=503,
-            detail="Celery is not available. Task status tracking requires Celery."
-        )
-    
+        raise HTTPException(status_code=503, detail="Celery not available")
+
     try:
         from celery.result import AsyncResult
         from worker.celery_app import celery_app
-        
+
         task_result = AsyncResult(task_id, app=celery_app)
-        
+
         response = {
             "task_id": task_id,
             "status": task_result.state,
             "ready": task_result.ready(),
         }
-        
+
+        # ✅ Treat REVOKED as a terminal state so the frontend exits the poll loop
+        if task_result.state == "REVOKED":
+            response["ready"] = True
+            response["success"] = False
+            response["error"] = "Task was cancelled"
+            return response
+
         if task_result.ready():
             if task_result.successful():
                 result = task_result.result
-                response["result"] = result
                 response["success"] = result.get("success", True) if isinstance(result, dict) else True
+                response["result"] = result
                 if isinstance(result, dict) and "doc_url" in result:
                     response["doc_url"] = result["doc_url"]
                 if isinstance(result, dict) and "history_id" in result:
@@ -169,9 +172,9 @@ async def get_task_status(task_id: str):
             response["message"] = "Task is waiting to be processed"
         elif task_result.state == "STARTED":
             response["message"] = "Task is currently being processed"
-        
+
         return response
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching task status: {str(e)}")
 

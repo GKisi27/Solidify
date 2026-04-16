@@ -7,6 +7,7 @@ import Login from './pages/Login/Login';
 import Result from './pages/Result/Result';
 import EstimateResults from './pages/Estimateresult/estimate_result';
 import { getStoredAccessToken, isTokenExpired } from './auth';
+import { ensureAuth } from './auth';  // add this import
 import {
 	BrowserRouter as Router,
 	Routes,
@@ -14,17 +15,30 @@ import {
 	Navigate,
 } from 'react-router-dom';
 
+import { startTokenRefreshTimer } from './auth';
+import { useState, useEffect } from 'react';
+
+
 function ProtectedRoute({ children }) {
-	const token = getStoredAccessToken();
+    const [ready, setReady] = useState(false);
+    const [authed, setAuthed] = useState(false);
 
-	if (!token || isTokenExpired(token)) {
-		return <Navigate to='/login' replace />;
-	}
+    useEffect(() => {
+        ensureAuth().then(ok => {
+            setAuthed(ok);
+            setReady(true);
+        });
+    }, []);
 
-	return children;
+    if (!ready) return null;
+    if (!authed) return <Navigate to='/login' replace />;
+    return children;
 }
 
 function App() {
+    useEffect(() => {
+        startTokenRefreshTimer();
+    }, []);
 	return (
 		<Router>
 			<Routes>

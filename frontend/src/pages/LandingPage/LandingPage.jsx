@@ -184,10 +184,13 @@ const LandingPage = () => {
 				while (!taskComplete) {
 					await new Promise((resolve) => setTimeout(resolve, 2000));
 
-					const statusRes = await api.get(
-						`${API_BASE}/task/${taskId}`,
-					);
+					const statusRes = await api.get(`${API_BASE}/task/${taskId}`);
 					const statusData = statusRes.data;
+
+					// ✅ Handle cancellation — exit the loop cleanly
+					if (statusData.status === 'REVOKED') {
+						throw new Error('Task was cancelled');
+					}
 
 					if (statusData.status === 'PENDING') {
 						setProgress(35);
@@ -195,14 +198,11 @@ const LandingPage = () => {
 						setProgress(50);
 					} else if (statusData.ready) {
 						taskComplete = true;
-
 						if (statusData.success && statusData.history_id) {
 							historyId = statusData.history_id;
 							setProgress(90);
 						} else {
-							throw new Error(
-								statusData.error || 'Conversion failed',
-							);
+							throw new Error(statusData.error || 'Conversion failed');
 						}
 					}
 				}
