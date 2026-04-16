@@ -50,7 +50,6 @@ def create_onshape_model_task(
         }
     """
     
-    print(f" create_onshape_model_task = {user_id}")  # Debug log to inspect input data keys
     if not previous_result.get("success", False):
         return previous_result
         

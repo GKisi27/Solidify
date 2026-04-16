@@ -11,6 +11,7 @@ from PIL import Image
 from concurrent.futures import ThreadPoolExecutor
 import threading
 from fastapi import Request
+from worker.utils.cancellation import request_cancellation
 
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -103,6 +104,25 @@ async def convert_to_3d_endpoint(
         "backend": "threadpool",
     }
 
+@router.delete("/task/{task_id}")
+async def stop_task(task_id: str):
+    if not celery_available:
+        raise HTTPException(status_code=503, detail="Celery not available")
+    try:
+        from celery.result import AsyncResult
+        from worker.celery_app import celery_app
+
+        request_cancellation(task_id)  # ← sets Redis flag
+
+        result = AsyncResult(task_id, app=celery_app)
+        curr = result
+        while curr:
+            celery_app.control.revoke(curr.id, terminate=True, signal='SIGKILL')
+            curr = curr.parent
+
+        return {"message": f"Cancellation requested for task {task_id}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to stop task: {str(e)}")
 
 @router.get("/task/{task_id}")
 async def get_task_status(task_id: str):

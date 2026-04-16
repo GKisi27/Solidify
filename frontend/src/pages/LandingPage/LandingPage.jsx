@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import Money from './Money';
@@ -30,8 +30,10 @@ const LandingPage = () => {
 	const navigate = useNavigate();
 	const inputRef = useRef(null);
 	const abortControllerRef = useRef(null);
+	const taskIdRef = useRef(null);
 
 	const [selectedImage, setSelectedImage] = useState(null);
+	const [isDragging, setIsDragging] = useState(false);
 	const [selectedFile, setSelectedFile] = useState(null);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [processingOpen, setProcessingOpen] = useState(false);
@@ -41,6 +43,56 @@ const LandingPage = () => {
 
 	const [conversionHistory, setConversionHistory] = useState([]);
 	const historyIdRef = useRef(1);
+
+	const handleImageFile = (file) => {
+		if (file && file.type.startsWith('image/')) {
+			setSelectedFile(file);
+			setSelectedImage(URL.createObjectURL(file));
+		} else {
+			alert("Please upload a valid image file (PNG or JPEG).");
+		}
+	};
+
+	// Listen for paste anywhere on the window
+	useEffect(() => {
+		const handlePaste = (e) => {
+			const items = e.clipboardData?.items;
+			if (!items) return;
+			
+			for (let i = 0; i < items.length; i++) {
+				if (items[i].type.indexOf('image') !== -1) {
+					const file = items[i].getAsFile();
+					handleImageFile(file);
+					break; // Stop after first image found
+				}
+			}
+		};
+
+		window.addEventListener('paste', handlePaste);
+		return () => {
+			window.removeEventListener('paste', handlePaste);
+		};
+	}, []);
+
+	// Drag & Drop event handlers
+	const handleDragOver = (e) => {
+		e.preventDefault();
+		setIsDragging(true);
+	};
+
+	const handleDragLeave = (e) => {
+		e.preventDefault();
+		setIsDragging(false);
+	};
+
+	const handleDrop = (e) => {
+		e.preventDefault();
+		setIsDragging(false);
+		if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+			handleImageFile(e.dataTransfer.files[0]);
+			e.dataTransfer.clearData();
+		}
+	};
 
 	const addToHistory = (file, type, thumb) => {
 		setConversionHistory((prev) => [
@@ -123,6 +175,7 @@ const LandingPage = () => {
 			// Check if using Celery or ThreadPoolExecutor
 			if (convertData.backend === 'celery' && convertData.task_id) {
 				const taskId = convertData.task_id;
+				taskIdRef.current = taskId;
 				let taskComplete = false;
 				let historyId = null;
 
@@ -167,6 +220,7 @@ const LandingPage = () => {
 					);
 
 				setProgress(100);
+				taskIdRef.current = null;
 				addToHistory(selectedFile, 'convert', selectedImage);
 
 				setTimeout(() => {
@@ -249,14 +303,15 @@ const LandingPage = () => {
 	};
 
 	return (
-		<div className='flex gap-6 px-8 py-6 min-h-screen'>
+		<div className='relative min-h-screen px-8 py-6 flex flex-col'>
+			
 			{/* ── Main content ── */}
-			<div className='flex-1 flex flex-col'>
-				<div className='flex flex-col items-center mt-14'>
-					<h1 className='font-bold text-[40px]'>
+			<div className='flex-1 flex flex-col w-full max-w-7xl mx-auto items-center'>
+				<div className='flex flex-col items-center mt-14 text-center'>
+					<h1 className='font-bold text-[40px] text-[#0D121B]'>
 						Convert your images to 3D images
 					</h1>
-					<p className='text-[18px] text-[#0D121B] text-center mt-2'>
+					<p className='text-[18px] text-[#0D121B] mt-2'>
 						Transform raster images into JSON for seamless Onshape
 						Integration. Design
 						<br />
@@ -287,15 +342,23 @@ const LandingPage = () => {
 									</div>
 								</div>
 							) : (
-								<div className='flex flex-col gap-5 justify-center items-center border-2 border-dashed border-[#CFD7E7] bg-[#F6F6F8]/30 rounded-xl h-89.5 w-183.5'>
+								<div 
+									onDragOver={handleDragOver}
+									onDragLeave={handleDragLeave}
+									onDrop={handleDrop}
+									className={`flex flex-col gap-5 justify-center items-center border-2 border-dashed rounded-xl h-89.5 w-183.5 transition-colors ${
+										isDragging 
+											? 'border-[#135BEC] bg-[#135BEC]/10' 
+											: 'border-[#CFD7E7] bg-[#F6F6F8]/30'
+									}`}
+								>
 									<AiOutlineCloudUpload className='text-[#135BEC] w-14.5 h-12' />
 									<div className='text-center'>
 										<div className='font-bold text-[#0D121B] text-[20px]'>
 											Upload your image
 										</div>
 										<div className='text-[#6B7280] text-[14px]'>
-											Drag and drop PNG or JPEG, up to
-											10MB
+											Drag and drop PNG or JPEG, paste from clipboard, or click to browse
 										</div>
 									</div>
 									<Button
@@ -313,12 +376,9 @@ const LandingPage = () => {
 										className='hidden'
 										onChange={(e) => {
 											const file = e.target.files[0];
-											if (file) {
-												setSelectedFile(file);
-												setSelectedImage(
-													URL.createObjectURL(file),
-												);
-											}
+											handleImageFile(file);
+											// Reset input so same file can be selected again if needed
+											e.target.value = ''; 
 										}}
 									/>
 								</div>
@@ -429,7 +489,15 @@ const LandingPage = () => {
 									</div>
 									<Button
 										className='bg-[#135BEC] text-white px-4 py-2 rounded-lg text-[14px] mt-6 cursor-pointer'
-										onClick={() => {
+										onClick={async () => {
+											if (taskIdRef.current) {
+												try {
+													await api.delete(`${API_BASE}/task/${taskIdRef.current}`);
+												} catch (e) {
+													console.error('Failed to cancel task:', e);
+												}
+												taskIdRef.current = null;
+											}
 											if (abortControllerRef.current)
 												abortControllerRef.current.abort();
 											setProcessingOpen(false);
@@ -459,8 +527,7 @@ const LandingPage = () => {
 				</div>
 			</div>
 
-			{/* ── History Sidebar ── */}
-			<div className='w-80 pt-14 flex-shrink-0'>
+			<div className='absolute top-20 right-8 z-50'>
 				<HistorySidebar onItemClick={handleHistoryClick} />
 			</div>
 		</div>

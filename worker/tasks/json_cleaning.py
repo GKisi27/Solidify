@@ -47,7 +47,6 @@ def clean_json_task(
         }
     """
         
-    print(f"Cleaning JSON for user_id={user_id}, file_stem={previous_result.get('file_stem')}")  # Debug log to inspect input data keys
     # Propagate failure from previous task
     if not previous_result.get("success", False):
         return previous_result

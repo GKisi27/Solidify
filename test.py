@@ -1,9 +1,9 @@
 # import psycopg2
 # import hashlib
-from passlib.context import CryptContext
+# from passlib.context import CryptContext
 
-# 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# # 
+# pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # def insert_user(username: str, password: str):
@@ -45,15 +45,16 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # # # Example usage
-# insert_user("admin12", "admin12")
+# insert_user("admin", "admin")
 
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
-
-
-hashed_password = pwd_context.hash("admin12")
+# def verify_password(plain: str, hashed: str) -> bool:
+#     return pwd_context.verify(plain, hashed)
 
 
-print(verify_password('admin12', hashed_password))
+# hashed_password = pwd_context.hash("admin12")
 
-# print(hash_password('admin12'))
+
+# print(verify_password('admin12', hashed_password))
+
+# # print(hash_password('admin12'))
+

@@ -49,7 +49,6 @@ def generate_json_task(
             "error": str (if success=False)
         }
     """
-    print(f"json generation task received previous_result: {previous_result}")  # Debug log to inspect input data
     try:
         # Extract data from previous task result
         part_type = previous_result["part_type"]

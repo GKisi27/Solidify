@@ -44,7 +44,6 @@ def process_image_task(
             "error": str (if success=False)
         }
     """
-    print(f"Processing image for user_id={user_id}, file_stem={file_stem}")  # Debug log to check input data
     try:
         # Load configuration
         cfg = load_config()
