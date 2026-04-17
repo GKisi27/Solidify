@@ -11,11 +11,35 @@ from app.models.user import User
 from app.schemas import Users, RefreshRequest, TokenResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from app.services.auth_services import authenticate_user, build_token_response
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+@router.post("/register", response_model=TokenResponse)
+def register(payload: Users, db: Session = Depends(get_db)):
+    existing_user = db.query(User).filter(User.username == payload.username).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already exists"
+        )
+
+    hashed_password = pwd_context.hash(payload.password)
+
+    user = User(
+        username=payload.username,
+        password=hashed_password
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return build_token_response(user)
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
