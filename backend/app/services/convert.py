@@ -45,8 +45,7 @@ def load_config() -> dict:
 
 
 PROMPT_FILES = {
-    "plate": "prompt1.yml",
-    "shaft": "prompt2.yml",
+    "prompt": "prompt1.yml",
 }
 
 
@@ -117,38 +116,6 @@ def get_gemini_client(api_key: str) -> genai.Client:
     """Instantiate and return a Gemini client."""
     return genai.Client(api_key=api_key)
 
-
-def detect_part_type(image: Image.Image, client: genai.Client, model: str, stop_event=None) -> str:
-    """
-    Ask Gemini to classify the image as a plate or shaft.
-
-    Returns:
-        ``"shaft"`` if the image is a shaft/cylindrical part, ``"plate"`` otherwise.
-    """
-    classification_prompt = (
-        "You are an expert at reading 2D engineering drawings. "
-        "Look at this drawing and classify the part as one of two types:\n"
-        "- 'shaft': a cylindrical/rotational part (has a revolve axis, cross-section views, symmetric profile)\n"
-        "- 'plate': a flat/prismatic part (extruded from top/front/side views, no revolve axis)\n"
-        "Reply with only one word: shaft or plate."
-    )
-
-    response = client.models.generate_content(
-        model=model,
-        contents=[image, classification_prompt],
-    )
-    
-    if stop_event and stop_event.is_set():
-                    print("Cancelled during Detection of the Part")
-                    return
-    answer = response.text.strip().lower()
-    part_type = "shaft" if "shaft" in answer else "plate"
-    print(f"[detect_part_type] Gemini classified image as: '{part_type}' (raw response: '{answer}')")
-    return part_type
-
-
-# Gemini 3.1 or gemini 3?? (test going on)
-
 def call_gemini(
     image: Image.Image,
     prompt: str,
@@ -176,6 +143,8 @@ def call_gemini(
         return json.loads(response.text)
     except json.JSONDecodeError as exc:
         raise ValueError(f"Gemini returned non-JSON response: {exc}") from exc
+
+
 
 def _unit_vector(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Return the unit direction vector from point *a* to point *b*."""
@@ -561,45 +530,43 @@ def build_sketch_entities(
     return (sketch_entities, last_id) if return_last_id else sketch_entities
 
 class OnshapeSession:
-    """Thin wrapper around the Onshape REST API for this converter."""
-
-    SUPPORTED_VIEWS = {"front", "top", "right"}
-
-    def __init__(self, access: str, secret: str, base: str = "https://cad.onshape.com"):
-        self.auth    = (access, secret)
-        self.base    = base
-        self.headers = {
+    def __init__(self, access, secret, base):
+        self.base = base
+        self._session = requests.Session()
+        self._session.auth = (access, secret)
+        self._session.headers.update({
             "Accept":       "application/json;charset=UTF-8;qs=0.09",
             "Content-Type": "application/json;charset=UTF-8;qs=0.09",
-        }
+        })
 
-    def _post(self, url: str, body: dict) -> dict:
-        resp = requests.post(url, json=body, auth=self.auth, headers=self.headers)
+    def _post(self, url, body):
+        resp = self._session.post(url, json=body)
         resp.raise_for_status()
         return resp.json()
 
-    def _get(self, url: str) -> dict:
-        resp = requests.get(url, auth=self.auth, headers=self.headers)
+    def _get(self, url):
+        resp = self._session.get(url)
         resp.raise_for_status()
         return resp.json()
+    
+    def _post_feature(self, url, body, defer_eval=False):
+        target_url = url + ("?rollbackBarIndex=999" if defer_eval else "")
+        resp = self._session.post(target_url, json=body)
+        resp.raise_for_status()
+        return resp.json()
+    
+    def create_document(self, name="3D model UI"):
+        doc = self._post(f"{self.base}/api/documents", {"name": name})
+        did = doc["id"]
+        wid = doc["defaultWorkspace"]["id"]
 
-    def create_document(self, name: str = "3D model UI") -> tuple[str, str, str]:
-        """
-        Create a new Onshape document and locate its Part Studio element.
-
-        Returns:
-            (document_id, workspace_id, element_id)
-        """
-        doc  = self._post(f"{self.base}/api/documents", {"name": name})
-        did  = doc["id"]
-        wid  = doc["defaultWorkspace"]["id"]
-
-        elements = self._get(f"{self.base}/api/documents/d/{did}/w/{wid}/elements")
-        for el in elements:
-            if el.get("elementType") == "PARTSTUDIO":
-                return did, wid, el["id"]
-
-        raise RuntimeError("No Part Studio found in the newly created document.")
+        # Smaller payload — filter to Part Studio only
+        elements = self._get(
+            f"{self.base}/api/documents/d/{did}/w/{wid}/elements"
+            "?elementType=PARTSTUDIO&withThumbnails=false"
+        )
+        eid = next(e["id"] for e in elements if e["elementType"] == "PARTSTUDIO")
+        return did, wid, eid
 
     def features_url(self, did: str, wid: str, eid: str) -> str:
         return f"{self.base}/api/v7/partstudios/d/{did}/w/{wid}/e/{eid}/features"
@@ -719,12 +686,12 @@ class OnshapeSession:
     ) -> str:
         """Post a sketch feature and return its featureId."""
         payload = self._sketch_payload(name, view_name, sketch_entities)
-        data = self._post(url, payload)
+        data = self._post_feature(url, payload)
         return data["feature"]["featureId"]
 
     def add_extrude(self, url: str, name: str, sketch_fid: str, **kwargs) -> str:
         payload = self._extrude_payload(name, sketch_fid, **kwargs)
-        data    = self._post(url, payload)
+        data    = self._post_feature(url, payload)
         return data["feature"]["featureId"]
 
     def add_revolve(
@@ -737,7 +704,7 @@ class OnshapeSession:
         **kwargs,
     ) -> str:
         payload = self._revolve_payload(name, sketch_fid, axis_sketch_fid, axis_entity_id, **kwargs)
-        data    = self._post(url, payload)
+        data    = self._post_feature(url, payload)
         return data["feature"]["featureId"]
 
 
@@ -859,47 +826,48 @@ class OnshapeSession:
                 opposite_direction=opposite_dir,
             )
 
-    def build_shaft(
-            self,
-            features_url: str,
-            views: list[dict],
-            revolve_axis: dict | None,
-            stop_event=None
-        ) -> None:
-            """Revolve-intersect shaft workflow."""
-            prev_fid: str | None = None
+    def _axis_data_valid(self, revolve_axis: dict | None) -> bool:
+        if not revolve_axis or not isinstance(revolve_axis, dict):
+            return False
+        required = ("start_x", "start_y", "end_x", "end_y")
+        if not all(k in revolve_axis for k in required):
+            return False
+        if revolve_axis["start_x"] == revolve_axis["end_x"] and \
+        revolve_axis["start_y"] == revolve_axis["end_y"]:
+            return False
+        return True
 
-            for idx, view in enumerate(views, start=1):
-                if stop_event and stop_event.is_set():
-                    print("Cancelled during build_shaft")
-                    return
-                view_name = view.get("name", f"view{idx}").lower()
-                if view_name not in self.SUPPORTED_VIEWS:
-                    continue
+    def build_shaft(self, features_url, views, revolve_axis, stop_event=None):
+        """Revolve-intersect shaft workflow."""
+        prev_fid: str | None = None
 
-                entities = view.get("entities", [])
-                if not entities:
-                    continue
+        for idx, view in enumerate(views, start=1):
+            if stop_event and stop_event.is_set():
+                print("Cancelled during build_shaft")
+                return
+            view_name = view.get("name", f"view{idx}").lower()
+            if view_name not in self.SUPPORTED_VIEWS:
+                continue
 
-                sketch_entities, last_id = build_sketch_entities(entities, return_last_id=True)
+            entities = view.get("entities", [])
+            if not entities:
+                continue
 
-                # --- Axis sketch (dedicated) ---
-                axis_sketch_fid: str | None = None
-                axis_entity_id: str | None  = None
+            sketch_entities, last_id = build_sketch_entities(entities, return_last_id=True)
 
-                if revolve_axis and isinstance(revolve_axis, dict) and "start_x" in revolve_axis:
-                    axis_id     = "revolve-axis"
-                    axis_entity = self._build_axis_entity(revolve_axis, axis_id)
-                    try:
-                        axis_sketch_fid = self.add_sketch(
-                            features_url,
-                            f"SketchAxis {idx} ({view_name})",
-                            view_name,
-                            [axis_entity],
-                        )
-                        axis_entity_id = axis_id
-                    except requests.HTTPError:
-                        axis_sketch_fid = None
+            axis_sketch_fid: str | None = None
+            axis_entity_id: str | None  = None
+            
+            if self._axis_data_valid(revolve_axis):
+                axis_id     = "revolve-axis"
+                axis_entity = self._build_axis_entity(revolve_axis, axis_id)
+                axis_sketch_fid = self.add_sketch(
+                    features_url,
+                    f"SketchAxis {idx} ({view_name})",
+                    view_name,
+                    [axis_entity],
+                )
+                axis_entity_id = axis_id
 
                 # Fallback: append horizontal axis to profile sketch
                 if not axis_sketch_fid:
@@ -985,12 +953,9 @@ def convert_to_3d(
     gemini_client = get_gemini_client(cfg["gemini_api_key"])
     
     # Auto-detect whether the image is a plate or shaft, then load the right prompt.
-    part_type = detect_part_type(image, gemini_client, cfg["gemini_model"],stop_event=stop_event)
-    if cancelled():
-        return None
-
-    prompt = load_prompt(part_type)
+    prompt = load_prompt("prompt")
     gemini_json = call_gemini(image, prompt, gemini_client, model=cfg["gemini_model"])
+
     if cancelled():
         return None
     gemini_path, converted_path = make_output_paths(file_stem, output_dir)

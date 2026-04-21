@@ -50,13 +50,12 @@ def generate_json_task(
     """
     try:
         # Extract data from previous task result
-        part_type = previous_result["part_type"]
         image_bytes = previous_result["image_bytes"]
         file_stem = previous_result["file_stem"]
         
         # Load configuration and prompt
         cfg = load_config()
-        prompt = load_prompt(part_type)
+        prompt = load_prompt("prompt")
         
         # Open and prepare image
         image = open_image(image_bytes)
@@ -85,7 +84,6 @@ def generate_json_task(
             "gemini_path": str(gemini_path),
             "file_stem": file_stem,
             "image_bytes": image_bytes,
-            "part_type": part_type,
             "success": True,
             "error": None,
         }

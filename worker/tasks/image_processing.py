@@ -11,7 +11,6 @@ from typing import Tuple
 from app.services.convert import (
     load_config,
     get_gemini_client,
-    detect_part_type,
     prepare_image,
     open_image,
 )
@@ -55,15 +54,9 @@ def process_image_task(
         gemini_client = get_gemini_client(cfg["gemini_api_key"])
         
         # Detect part type
-        part_type = detect_part_type(
-            image=image,
-            client=gemini_client,
-            model=cfg["gemini_model"],
-            stop_event=None  # No cancellation support in Celery tasks
-        )
+
         
         return {
-            "part_type": part_type,
             "file_stem": file_stem,
             "image_bytes": image_bytes,  # Pass along for next task
             "success": True,

@@ -54,7 +54,6 @@ def create_onshape_model_task(
         gemini_json = previous_result["gemini_json"]
         file_stem = previous_result["file_stem"]
         image_bytes = previous_result["image_bytes"]
-        part_type = previous_result["part_type"]
         gemini_path = previous_result["gemini_path"]
         converted_path = previous_result["converted_path"]
         

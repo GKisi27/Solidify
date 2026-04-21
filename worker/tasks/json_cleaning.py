@@ -50,7 +50,6 @@ def clean_json_task(
         gemini_json = previous_result["gemini_json"]
         file_stem = previous_result["file_stem"]
         image_bytes = previous_result["image_bytes"]
-        part_type = previous_result["part_type"]
         gemini_path = previous_result["gemini_path"]
         
         # Convert JSON format
@@ -70,7 +69,6 @@ def clean_json_task(
             "gemini_path": gemini_path,
             "file_stem": file_stem,
             "image_bytes": image_bytes,
-            "part_type": part_type,
             "success": True,
             "error": None,
         }
