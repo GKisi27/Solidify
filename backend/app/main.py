@@ -26,7 +26,7 @@ def startup_event():
 
     Base.metadata.create_all(bind=engine)
     # Initialize knowledge base or other services
-    _ensure_kb()
+    # _ensure_kb()
     print("✅ API ready")
 
 @app.get("/")

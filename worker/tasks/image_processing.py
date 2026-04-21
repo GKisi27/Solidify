@@ -4,6 +4,7 @@ Celery task for image processing and part type detection.
 from io import BytesIO
 from PIL import Image
 from celery import shared_task
+import base64
 
 from app.services.convert import (
     load_config,
@@ -78,7 +79,7 @@ def process_image_task(
         return {
             "part_type": part_type,
             "file_stem": file_stem,
-            "image_bytes": image_bytes,
+            "image_bytes": base64.b64encode(image_bytes).decode("utf-8"),
             "user_id": user_id,
             "success": True,
             "error": None,

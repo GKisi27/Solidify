@@ -228,7 +228,7 @@ export default function Result() {
 										color: '#0D121B',
 									}}
 								>
-									Base Mesh JSON
+									Gemini JSON
 								</span>
 							</div>
 							{geminiJson && (
@@ -319,7 +319,7 @@ export default function Result() {
 										color: '#0D121B',
 									}}
 								>
-									Onshape Compatible JSON
+									Converted OnShape compatible JSON
 								</span>
 							</div>
 							{convertedJson && (

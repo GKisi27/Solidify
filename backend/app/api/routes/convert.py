@@ -158,7 +158,7 @@ async def get_task_status(task_id: str):
             if task_result.successful():
                 result = task_result.result
                 response["success"] = result.get("success", True) if isinstance(result, dict) else True
-                response["result"] = result
+                response["result"] = result  # ❌ this includes image_bytes if pipeline failed
                 if isinstance(result, dict) and "doc_url" in result:
                     response["doc_url"] = result["doc_url"]
                 if isinstance(result, dict) and "history_id" in result:

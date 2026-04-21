@@ -995,6 +995,7 @@ def convert_to_3d(
         return None
 
     prompt = load_prompt(part_type, user_prompt)
+    print(f"prompt from voncert {prompt}")
     gemini_json = call_gemini(image, prompt, gemini_client, model=cfg["gemini_model"])
     if cancelled():
         return None

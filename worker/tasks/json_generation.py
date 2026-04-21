@@ -5,6 +5,7 @@ import json
 from io import BytesIO
 from PIL import Image
 from celery import shared_task
+import base64
 
 from app.services.convert import (
     load_config,
@@ -62,7 +63,6 @@ def generate_json_task(
         return {
             "gemini_json": None,
             "file_stem": previous_result.get("file_stem"),
-            "image_bytes": previous_result.get("image_bytes"),
             "part_type": previous_result.get("part_type"),
             "user_id": previous_result.get("user_id", user_id),
             "success": False,
@@ -72,15 +72,17 @@ def generate_json_task(
 
     try:
         part_type = previous_result["part_type"]
-        image_bytes = previous_result["image_bytes"]
         file_stem = previous_result["file_stem"]
         user_id = previous_result.get("user_id", user_id)
 
         cfg = load_config()
         prompt = load_prompt(part_type, user_prompt)
 
-        image = open_image(image_bytes)
+        image_bytes_encoded = previous_result["image_bytes"]  # still a string
+        image_bytes_raw = base64.b64decode(image_bytes_encoded)
+        image = open_image(image_bytes_raw)  # ✅ decode for PIL
         image = prepare_image(image)
+
 
         gemini_client = get_gemini_client(cfg["gemini_api_key"])
 
@@ -96,7 +98,7 @@ def generate_json_task(
         return {
             "gemini_json": gemini_json,
             "file_stem": file_stem,
-            "image_bytes": image_bytes,
+            "image_bytes": image_bytes_encoded,
             "part_type": part_type,
             "user_id": user_id,
             "success": True,
@@ -113,7 +115,6 @@ def generate_json_task(
         return {
             "gemini_json": None,
             "file_stem": previous_result.get("file_stem"),
-            "image_bytes": previous_result.get("image_bytes"),
             "part_type": previous_result.get("part_type"),
             "user_id": user_id,
             "success": False,

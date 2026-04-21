@@ -57,7 +57,6 @@ def clean_json_task(
             "converted_json": None,
             "gemini_json": previous_result.get("gemini_json"),
             "file_stem": previous_result.get("file_stem"),
-            "image_bytes": previous_result.get("image_bytes"),
             "part_type": previous_result.get("part_type"),
             "user_id": previous_result.get("user_id", user_id),
             "success": False,

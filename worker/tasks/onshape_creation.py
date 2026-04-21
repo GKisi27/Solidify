@@ -8,6 +8,7 @@ from app.services.convert import (
     load_config,
     OnshapeSession,
 )
+import base64
 from app.services.to_db import save_history
 
 
@@ -47,6 +48,7 @@ def create_onshape_model_task(
     """
     from worker.utils.cancellation import is_cancelled, clear_cancellation
 
+
     # Propagate failure from previous task — includes cancellations
     if not previous_result.get("success", False):
         return previous_result
@@ -68,10 +70,12 @@ def create_onshape_model_task(
     # ────────────────────────────────────────────────────────────────────────
 
     try:
+        image_bytes_raw = base64.b64decode(previous_result["image_bytes"])
+
         converted_json = previous_result["converted_json"]
         gemini_json = previous_result["gemini_json"]
         file_stem = previous_result["file_stem"]
-        image_bytes = previous_result["image_bytes"]
+        # image_bytes = previous_result["image_bytes"]
         part_type = previous_result["part_type"]
         user_id = previous_result.get("user_id", user_id)
 
@@ -107,7 +111,7 @@ def create_onshape_model_task(
         doc_url = f"{cfg['onshape_base']}/documents/{did}/w/{wid}/e/{eid}"
 
         history_entry = save_history(
-            image_bytes=image_bytes,
+            image_bytes=image_bytes_raw,
             filename=file_stem,
             gemini_json=gemini_json,
             converted_json=converted_json,
