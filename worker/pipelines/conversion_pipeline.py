@@ -10,7 +10,7 @@ from worker.tasks import (
 )
 
 
-def run_conversion_pipeline(image_bytes: bytes, file_stem: str, user_id: int) -> chain:
+def run_conversion_pipeline(image_bytes: bytes, file_stem: str, user_id: int, user_prompt: str = None) -> chain:
     """
     Create and execute the full conversion pipeline.
     
@@ -37,7 +37,7 @@ def run_conversion_pipeline(image_bytes: bytes, file_stem: str, user_id: int) ->
     # Each task returns a dict, and the next task unpacks it using **kwargs
     pipeline = (
         process_image_task.s(image_bytes, file_stem, user_id) |
-        generate_json_task.s(user_id=user_id) |
+        generate_json_task.s(user_id=user_id, user_prompt=user_prompt) |
         clean_json_task.s(user_id=user_id) |
         create_onshape_model_task.s(user_id=user_id)
     )
@@ -49,6 +49,7 @@ def run_conversion_pipeline_with_callback(
     image_bytes: bytes,
     file_stem: str,
     user_id: int,
+    user_prompt: str = None,
     callback=None
 ) -> chain:
     """
@@ -63,7 +64,7 @@ def run_conversion_pipeline_with_callback(
     Returns:
         Celery chain with callback appended
     """
-    pipeline = run_conversion_pipeline(image_bytes, file_stem, user_id)
+    pipeline = run_conversion_pipeline(image_bytes, file_stem, user_id, user_prompt)
     
     if callback:
         pipeline = pipeline | callback
@@ -72,7 +73,7 @@ def run_conversion_pipeline_with_callback(
 
 
 # Convenience function for direct execution
-def convert_image_to_3d(image_bytes: bytes, file_stem: str, user_id: int):
+def convert_image_to_3d(image_bytes: bytes, file_stem: str, user_id: int, user_prompt: str = None):
     """
     Directly execute the conversion pipeline.
     
@@ -91,5 +92,5 @@ def convert_image_to_3d(image_bytes: bytes, file_stem: str, user_id: int):
         >>> # Get result (blocks until complete)
         >>> final_result = result.get()
     """
-    pipeline = run_conversion_pipeline(image_bytes, file_stem, user_id)
+    pipeline = run_conversion_pipeline(image_bytes, file_stem, user_id, user_prompt)
     return pipeline.apply_async()

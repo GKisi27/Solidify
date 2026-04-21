@@ -49,7 +49,11 @@ PROMPT_FILES = {
 }
 
 
-def load_prompt(part_type: str = "plate") -> str:
+def load_prompt(part_type: str = "plate", user_prompt: str = None) -> str:
+
+    if user_prompt and user_prompt.strip():
+        return user_prompt.strip()
+
     prompt_file = PROMPT_FILES.get(part_type)
     if not prompt_file:
         raise ValueError(f"Unknown part_type '{part_type}'. Must be one of: {list(PROMPT_FILES)}")
@@ -957,6 +961,7 @@ def convert_to_3d(
     image_bytes: bytes,
     stop_event = None,
     user_id: int = None,     
+    user_prompt: str = None,
     *,
     output_dir: str | None = None,
 ) -> tuple[str, Path, Path]:
@@ -989,7 +994,7 @@ def convert_to_3d(
     if cancelled():
         return None
 
-    prompt = load_prompt(part_type)
+    prompt = load_prompt(part_type, user_prompt)
     gemini_json = call_gemini(image, prompt, gemini_client, model=cfg["gemini_model"])
     if cancelled():
         return None

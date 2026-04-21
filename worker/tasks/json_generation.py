@@ -25,7 +25,8 @@ from app.services.convert import (
 def generate_json_task(
     self,
     previous_result: dict,
-    user_id: int = None
+    user_id: int = None,
+    user_prompt: str = None,
 ) -> dict:
     """
     Generate coordinate JSON from image using Gemini AI.
@@ -76,12 +77,14 @@ def generate_json_task(
         user_id = previous_result.get("user_id", user_id)
 
         cfg = load_config()
-        prompt = load_prompt(part_type)
+        prompt = load_prompt(part_type, user_prompt)
 
         image = open_image(image_bytes)
         image = prepare_image(image)
 
         gemini_client = get_gemini_client(cfg["gemini_api_key"])
+
+        print(f"Final prompt {prompt}")
 
         gemini_json = call_gemini(
             image=image,

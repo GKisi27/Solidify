@@ -3,7 +3,7 @@ import os
 import sys
 from pathlib import Path
 from app.dependencies.auth import get_current_user
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form
 from app.models.user import User
 from app.services.convert import convert_to_3d
 import base64, json, io
@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 import threading
 from fastapi import Request
 from worker.utils.cancellation import request_cancellation
+import yaml
 
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -43,27 +44,28 @@ if USE_CELERY:
 async def convert_to_3d_endpoint(
     request: Request,
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),  # ← add this
+    prompt_file_content: str = Form(None),
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Convert a 2D image to a 3D CAD model.
-    
-    Supports two modes:
-    1. Celery (async, distributed) - Default if Celery is running
-    2. ThreadPoolExecutor (sync, in-process) - Fallback
-    
-    Returns task_id if using Celery, or direct result if using ThreadPoolExecutor.
-    """
     image_bytes = await file.read()
     image = Image.open(io.BytesIO(image_bytes))
-    print(f"Current user ID: {current_user.id}")  # Debug log to check user ID
-    
-    # Use Celery if available
+
+    # ── Resolve prompt ────────────────────────────────────────────
+    user_prompt = None
+    if prompt_file_content and prompt_file_content.strip():
+        try:
+            data = yaml.safe_load(prompt_file_content)
+            user_prompt = data.get("prompt") if isinstance(data, dict) else None
+            if not user_prompt:
+                raise HTTPException(status_code=400, detail="YML file must have a top-level 'prompt' key")
+        except yaml.YAMLError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid YML file: {e}")
+    # user_prompt=None → load_prompt() uses default file
+    # ─────────────────────────────────────────────────────────────
+
     if celery_available:
         try:
-            # Submit to Celery pipeline
-            result = convert_image_to_3d(image_bytes, file.filename, current_user.id)
-            
+            result = convert_image_to_3d(image_bytes, file.filename, current_user.id, user_prompt)
             return {
                 "message": "Conversion started",
                 "task_id": result.id,
@@ -73,30 +75,27 @@ async def convert_to_3d_endpoint(
             }
         except Exception as e:
             print(f"❌ Celery execution failed: {e}, falling back to ThreadPoolExecutor")
-            # Fall through to ThreadPoolExecutor
-    
-    # Fallback to ThreadPoolExecutor (original implementation)
+
+    # ThreadPoolExecutor fallback
     loop = asyncio.get_event_loop()
     stop_event = threading.Event()
+    future = loop.run_in_executor(
+        executor, convert_to_3d, image, file.filename, image_bytes, stop_event, current_user.id, user_prompt
+    )
 
-    future = loop.run_in_executor(executor, convert_to_3d, image, file.filename, image_bytes, stop_event, current_user.id)
-    
     while not future.done():
         if await request.is_disconnected():
             stop_event.set()
-            print("Client disconnected — stop_event set")
             return {"message": "Cancelled"}
         await asyncio.sleep(0.5)
-    
+
     result = future.result()
     if result is None:
         return {"message": "Cancelled mid-processing"}
 
-    doc_url, gemini_path, converted_path = result  
-
+    doc_url = result
     converted_bytes_io = io.BytesIO()
     image.save(converted_bytes_io, format="PNG")
-    converted_b64 = base64.b64encode(converted_bytes_io.getvalue()).decode("utf-8")
 
     return {
         "message": "3D conversion done",
@@ -104,7 +103,6 @@ async def convert_to_3d_endpoint(
         "backend": "threadpool",
     }
 
-# routes/files.py  — replace the DELETE and GET /task endpoints
 
 @router.delete("/task/{task_id}")
 async def stop_task(task_id: str):
