@@ -93,6 +93,10 @@ services:
       - backend
     environment:
       - CHOKIDAR_USEPOLLING=true
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    command: sh -c "npm install --legacy-peer-deps && npm run dev -- --host"  # ← add this
 
   postgres:
     image: postgres:15.5

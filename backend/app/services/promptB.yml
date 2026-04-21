@@ -1,0 +1,66 @@
+prompt: |
+          Analyze the provided 2D mechanical CAD image that contains multiple views(front, top..). The image contains a contour defined by a sequence of lines and arcs, along with associated dimensions (lengths and radii).
+
+          <CRITICAL_INSTRUCTION>
+          +===============================================================================================================================================================+
+          |    THREE-CENTERLINE SLOT PROTOCOL (MANDATORY):                                                                                                                |
+          |    You will encounter "Slot" (obround) geometries marked with THREE parallel centerlines. You MUST strictly adhere to this interpretation logic:              |
+          |    1.  **Identification**: If a slot has a central axis line AND two marking lines on either side, it is a "Three-Centerline Slot."                           |
+          |    2.  **The Middle Line**: Represents the geometric CENTROID (Symmetry Axis) only. It is NOT an arc center.                                                  |
+          |    3.  **The Outer Lines**: Represent the ACTUAL centers of the two end arcs.                                                                                 |
+          |    4.  **The Dimension**: The length dimension provided is the **Center-to-Center distance** (distance between the two outer lines).                          |
+          |    5.  **Calculation**: You MUST calculate the coordinates for two distinct ARC centers.                                                                      |
+          |        *   Start at the Middle Line coordinate.                                                                                                               |
+          |        *   Add/Subtract exactly **HALF** of the provided length dimension to find the two true Arc Centers.                                                   |
+          |    6.  **Decomposition**: Output the slot as exactly 2 ARCs and 2 LINEs.                                                                                      |
+          |    FAILURE TO DISTINGUISH THE MIDDLE CENTERLINE FROM THE OUTER ARC CENTERS WILL RESULT IN INVALID COORDINATES.                                                |
+          |                                                                                                                                        |
+          +===============================================================================================================================================================+
+
+          CRITICAL_INSTRUCTION>
+
+          Your task is to accurately extract the coordinates of all unique vertices, which include the endpoints of straight line segments and the tangency points of arc segments, that define the main visible geometry's contour.
+          Don't take dimensions and extension lines as part of geometry.
+          Note : Identify only mentioned primitives(LINE, CIRCLE, ARC).
+          Steps for Coordinate Extraction:
+          1) Determine the Bounding Box: Calculate the absolute minimum X and minimum Y values for the entire visible geometry.
+          2) Set the Origin: Establish the origin (0.00, 0.00) at the absolute bottom-left corner of the geometry's bounding box. All extracted coordinates must be non-negative relative to this new origin.
+          3) Trace the Contour: Start the extraction from the lowest point on the leftmost side of the visible geometry and proceed sequentially along the contour.
+          4) Calculate Coordinates: Use the provided dimensional values (lengths and radii) to calculate the precise (X, Y) coordinates of each unique vertex (endpoints and tangency points) relative to the (0.00, 0.00) origin.
+          Output Requirements:
+          Return a single, plain text string containing only the extracted coordinates.
+          Strict adherence to the schema: ...
+          Schema:
+          {
+            "views": [
+              {
+                "name": "front",
+                "entities": [ ... ]
+              },
+              {
+                "name": "right",
+                "entities": [ ... ]
+              }
+            ],
+            "metadata": { "units": "mm", "scale": 1 }
+          }
+          Rules:
+          1. entities array must contain objects of type: LINE, ARC, CIRCLE.
+          - LINE → start_x, start_y, end_x, end_y.
+          - ARC → center_x, center_y, radius, start_x, end_x, start_y, end_y, 'clockwise'.
+          - CIRCLE → center_x, center_y, radius.
+          2. Don't include hidden/ construction lines in entities(only for reference dimensions)
+          3. metadata must always include "units": "mm" and "scale": 1`.
+          4. All numeric values must be numbers (not strings).
+          5. Include all entities visible in the drawing. Do not omit any.
+          6. Preserve at least 3 decimal places for precision.
+          7. No text or explanation — return only valid JSON following this pattern exactly.
+          8. Fillet are same as ARC. Convert fillet into arc type.
+          9. See the bigger picture(whole) in drawing( do not focus on other boundary only).
+          10. For entities of each view make a separate reference point to start entities from.
+          11. Deduce the missing dimensions for one view by inferring to other that have a known dimension.
+          12. Views name must only be front or right or top not anything else.
+          13. Read views name from the drawing if provided.
+          14.❗❗❗**STRICT SLOT HANDLING**: Refer to the `<CRITICAL_INSTRUCTION>` block at the start of this prompt. For slots with three parallel centerlines, you are FORBIDDEN from using the middle line as an arc center. You must mathematically offset from the middle line by `Dimension / 2` to find the true `center_x` or `center_y` for the ARCs.
+
+          Return ONLY the plain text string of coordinates, nothing else.
