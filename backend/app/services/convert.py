@@ -568,21 +568,39 @@ class OnshapeSession:
 
     SUPPORTED_VIEWS = {"front", "top", "right"}
 
-    def __init__(self, access: str, secret: str, base: str = "https://cad.onshape.com"):
-        self.auth    = (access, secret)
-        self.base    = base
-        self.headers = {
+    def __init__(self, access, secret, base):
+        self.base = base
+        self._session = requests.Session()
+        self._session.auth = (access, secret)
+        self._session.headers.update({
             "Accept":       "application/json;charset=UTF-8;qs=0.09",
             "Content-Type": "application/json;charset=UTF-8;qs=0.09",
-        }
+        })
 
     def _post(self, url: str, body: dict) -> dict:
-        resp = requests.post(url, json=body, auth=self.auth, headers=self.headers)
+        resp = self._session.post(url, json=body)
         resp.raise_for_status()
         return resp.json()
 
     def _get(self, url: str) -> dict:
-        resp = requests.get(url, auth=self.auth, headers=self.headers)
+        resp = self._session.get(url)
+        resp.raise_for_status()
+        return resp.json()
+    
+    def _axis_data_valid(self, revolve_axis: dict | None) -> bool:
+        if not revolve_axis or not isinstance(revolve_axis, dict):
+            return False
+        required = ("start_x", "start_y", "end_x", "end_y")
+        if not all(k in revolve_axis for k in required):
+            return False
+        if revolve_axis["start_x"] == revolve_axis["end_x"] and \
+        revolve_axis["start_y"] == revolve_axis["end_y"]:
+            return False
+        return True
+
+    def _post_feature(self, url: str, body: dict, defer_eval: bool = False) -> dict:
+        target_url = url + ("?rollbackBarIndex=999" if defer_eval else "")
+        resp = self._session.post(target_url, json=body)
         resp.raise_for_status()
         return resp.json()
 
@@ -597,10 +615,12 @@ class OnshapeSession:
         did  = doc["id"]
         wid  = doc["defaultWorkspace"]["id"]
 
-        elements = self._get(f"{self.base}/api/documents/d/{did}/w/{wid}/elements")
-        for el in elements:
-            if el.get("elementType") == "PARTSTUDIO":
-                return did, wid, el["id"]
+        elements = self._get(
+            f"{self.base}/api/documents/d/{did}/w/{wid}/elements"
+            "?elementType=PARTSTUDIO&withThumbnails=false"
+)
+        eid = next(e["id"] for e in elements if e["elementType"] == "PARTSTUDIO")
+        return did, wid, eid
 
         raise RuntimeError("No Part Studio found in the newly created document.")
 
@@ -717,30 +737,19 @@ class OnshapeSession:
             },
         }
 
-    def add_sketch(
-        self, url: str, name: str, view_name: str, sketch_entities: list[dict]
-    ) -> str:
-        """Post a sketch feature and return its featureId."""
+    def add_sketch(self, url: str, name: str, view_name: str, sketch_entities: list[dict], defer_eval: bool = False) -> str:
         payload = self._sketch_payload(name, view_name, sketch_entities)
-        data = self._post(url, payload)
+        data = self._post_feature(url, payload, defer_eval=defer_eval)
         return data["feature"]["featureId"]
 
-    def add_extrude(self, url: str, name: str, sketch_fid: str, **kwargs) -> str:
+    def add_extrude(self, url: str, name: str, sketch_fid: str, defer_eval: bool = False, **kwargs) -> str:
         payload = self._extrude_payload(name, sketch_fid, **kwargs)
-        data    = self._post(url, payload)
+        data = self._post_feature(url, payload, defer_eval=defer_eval)
         return data["feature"]["featureId"]
 
-    def add_revolve(
-        self,
-        url: str,
-        name: str,
-        sketch_fid: str,
-        axis_sketch_fid: str,
-        axis_entity_id: str,
-        **kwargs,
-    ) -> str:
+    def add_revolve(self, url: str, name: str, sketch_fid: str, axis_sketch_fid: str, axis_entity_id: str, defer_eval: bool = False, **kwargs) -> str:
         payload = self._revolve_payload(name, sketch_fid, axis_sketch_fid, axis_entity_id, **kwargs)
-        data    = self._post(url, payload)
+        data = self._post_feature(url, payload, defer_eval=defer_eval)
         return data["feature"]["featureId"]
 
 
@@ -784,19 +793,17 @@ class OnshapeSession:
         axis_sketch_fid: str | None = None
         axis_entity_id:  str | None = None
 
-        if revolve_axis and isinstance(revolve_axis, dict) and "start_x" in revolve_axis:
+        if self._axis_data_valid(revolve_axis):
             axis_id     = "revolve-axis"
             axis_entity = self._build_axis_entity(revolve_axis, axis_id)
-            try:
-                axis_sketch_fid = self.add_sketch(
-                    features_url,
-                    f"SketchAxis {idx} ({view_name})",
-                    view_name,
-                    [axis_entity],
-                )
-                axis_entity_id = axis_id
-            except requests.HTTPError:
-                axis_sketch_fid = None
+            axis_sketch_fid = self.add_sketch(
+                features_url,
+                f"SketchAxis {idx} ({view_name})",
+                view_name,
+                [axis_entity],
+            )
+            axis_entity_id = axis_id
+
 
         # Fallback: embed axis as construction line in the profile sketch.
         if not axis_sketch_fid:
