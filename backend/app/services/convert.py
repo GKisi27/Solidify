@@ -563,6 +563,86 @@ def build_sketch_entities(
 
     return (sketch_entities, last_id) if return_last_id else sketch_entities
 
+# HELPER FUNCTIONS
+# ── Coincident-constraint helpers ─────────────────────────────────────────
+
+def _pts_close(a: tuple, b: tuple, tol: float = 0.05) -> bool:
+    """True if two (x, y) mm-coordinate pairs are within *tol* mm."""
+    return abs(a[0] - b[0]) < tol and abs(a[1] - b[1]) < tol
+
+
+def _entity_endpoints(entity: dict, uid: str) -> list[tuple[tuple, str]]:
+    """
+    Return [(coord_mm, point_id), ...] for a converted entity.
+    CIRCLEs are skipped (no endpoint concept).
+    ARCs use the clockwise-from-+X angle convention stored in start/end_angle.
+    """
+    kind = entity["type"]
+    if kind == "LINE":
+        return [
+            ((entity["start_x"], entity["start_y"]), f"{uid}.start"),
+            ((entity["end_x"],   entity["end_y"]),   f"{uid}.end"),
+        ]
+    if kind == "ARC":
+        cx, cy, r = entity["center_x"], entity["center_y"], entity["radius"]
+        sa = math.radians(entity["start_angle"])
+        ea = math.radians(entity["end_angle"])
+        # CW convention: y-component is negated vs standard CCW math
+        return [
+            ((cx + r * math.cos(sa), cy - r * math.sin(sa)), f"{uid}.start"),
+            ((cx + r * math.cos(ea), cy - r * math.sin(ea)), f"{uid}.end"),
+        ]
+    return []
+
+
+def build_sketch_constraints(
+    view_entities: list[dict],
+    sketch_entities: list[dict],
+) -> list[dict]:
+    """
+    Detect shared endpoints across sketch entities and emit COINCIDENT constraints.
+
+    Args:
+        view_entities:   The converted (mm) entity dicts — LINE/ARC/CIRCLE.
+        sketch_entities: The BTM entity dicts returned by build_sketch_entities(),
+                         used only to read entityId values.
+    """
+    prefix_map = {"LINE": "line", "ARC": "arc", "CIRCLE": "circle"}
+    registry: list[tuple[tuple, str]] = []
+
+    for counter, entity in enumerate(view_entities):
+        kind = entity["type"]
+        uid  = f"{prefix_map[kind]}-{counter}"
+        registry.extend(_entity_endpoints(entity, uid))
+
+    constraints: list[dict] = []
+    seen: set = set()
+    cid = 0
+
+    for i, (ca, ida) in enumerate(registry):
+        for cb, idb in registry[i + 1:]:
+            if ida == idb:
+                continue
+            if not _pts_close(ca, cb):
+                continue
+            key = (min(ida, idb), max(ida, idb))
+            if key in seen:
+                continue
+            seen.add(key)
+            constraints.append({
+                "btType":           "BTMSketchConstraint-2",
+                "constraintType":   "COINCIDENT",
+                "entityId":         f"coincident-{cid}",
+                "parameters": [
+                    {"btType": "BTMParameterString-149",
+                     "value": ida, "parameterId": "localFirst"},
+                    {"btType": "BTMParameterString-149",
+                     "value": idb, "parameterId": "localSecond"},
+                ],
+            })
+            cid += 1
+
+    return constraints
 class OnshapeSession:
     """Thin wrapper around the Onshape REST API for this converter."""
 
@@ -634,6 +714,7 @@ class OnshapeSession:
         name: str,
         view_name: str,
         sketch_entities: list[dict],
+        constraints: list[dict] | None = None,
     ) -> dict:
         plane_id = view_name.capitalize()
         return {
@@ -656,7 +737,7 @@ class OnshapeSession:
                     }
                 ],
                 "entities":    sketch_entities,
-                "constraints": [],
+                "constraints": constraints or [],
             }
         }
 
@@ -737,10 +818,16 @@ class OnshapeSession:
             },
         }
 
-    def add_sketch(self, url: str, name: str, view_name: str, sketch_entities: list[dict], defer_eval: bool = False) -> str:
-        payload = self._sketch_payload(name, view_name, sketch_entities)
+    def add_sketch(self, url, name, view_name, sketch_entities,
+                view_entities=None, defer_eval=False):          
+        constraints = (
+            build_sketch_constraints(view_entities, sketch_entities)
+            if view_entities else []
+        )
+        payload = self._sketch_payload(name, view_name, sketch_entities, constraints)
         data = self._post_feature(url, payload, defer_eval=defer_eval)
         return data["feature"]["featureId"]
+
 
     def add_extrude(self, url: str, name: str, sketch_fid: str, defer_eval: bool = False, **kwargs) -> str:
         payload = self._extrude_payload(name, sketch_fid, **kwargs)
@@ -852,11 +939,12 @@ class OnshapeSession:
 
             sketch_entities = build_sketch_entities(entities)
             sketch_fid = self.add_sketch(
-                features_url,
-                f"Sketch {idx} ({view_name})",
-                view_name,
-                sketch_entities,
-            )
+                    features_url,
+                    f"Sketch {idx} ({view_name})",
+                    view_name,
+                    sketch_entities,
+                    view_entities=entities,      
+)
 
             operation         = "NEW" if prev_fid is None else "INTERSECT"
             opposite_dir      = prev_fid is None         
@@ -910,7 +998,6 @@ class OnshapeSession:
                         axis_entity_id = axis_id
                     except requests.HTTPError:
                         axis_sketch_fid = None
-
                 # Fallback: append horizontal axis to profile sketch
                 if not axis_sketch_fid:
                     max_x = max(
