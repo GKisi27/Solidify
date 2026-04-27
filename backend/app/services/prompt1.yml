@@ -14,10 +14,16 @@ prompt: |
           5. Entity chain continuity is mandatory: entity[n].end_x == entity[n+1].start_x and entity[n].end_y == entity[n+1].start_y to 3 decimal places. The contour must close.
           6. Arc-to-arc tangent junctions: the shared point must lie exactly on the line connecting the two arc centers (external tangency: d == R1+R2; internal tangency: d == |R1−R2|).
           7. Fillets → ARC type. Chamfers → two LINE types.
-          8. Each view uses its own local origin at its own bounding box bottom-left corner.
+          8. Each view uses its own local origin as defined in <COORDINATE_SYSTEM>.
           9. Cross-view shared dimensions must be numerically equal across views.
           10. View name values are exactly "front", "right", or "top" — read from drawing labels.
           11. Minimum 3 decimal places on every numeric value.
+          12. Detail view given for minute details, use this view properly.
+          13. FLAT PLATE MODE (when triggered by <FLAT_PLATE_DETECTION>):
+              The ELECTED main face view (determined in STEP 2) is the ONLY view output in "views".
+              All other views — edge, side, auxiliary, thin-rectangle views — are consulted for
+              thickness only. Their geometry is NEVER emitted.
+              The "views" array contains EXACTLY ONE entry: the elected main face view.
           </HARD_RULES>
 
           <SLOT_RULE>
@@ -31,52 +37,184 @@ prompt: |
           </SLOT_RULE>
 
           <COORDINATE_SYSTEM>
-          - Origin (0.000, 0.000) = bottom-left corner of each view's bounding box (per-view local origin).
-          - All coordinates non-negative.
-          - Missing dimensions in one view must be inferred from the corresponding dimension in another view.
-          - Trace contour starting from the lowest point on the leftmost edge, proceeding sequentially.
+          ORIGIN PLACEMENT — read from the drawing, then apply the first matching rule:
+
+            1. CENTERED (default for symmetric parts):
+               If the drawing shows a centerline or the part is symmetric about one or both axes,
+               place the origin at the geometric center of the view's bounding box.
+               Coordinates span: x ∈ [−W/2, +W/2], y ∈ [−H/2, +H/2]
+               Quadrants used: all four (−x,−y) (−x,+y) (+x,−y) (+x,+y)
+
+            2. BOTTOM-LEFT (default for non-symmetric engineering views):
+               If no centering cue is present, place origin at the bottom-left corner
+               of the view's bounding box.
+               Coordinates span: x ∈ [0, W], y ∈ [0, H]  — all non-negative.
+
+            3. EXPLICIT (drawing labels origin or datum):
+               If the drawing marks a specific datum or origin symbol (⊕), use that exact point.
+               Coordinates may be negative in any axis from that datum.
+
+          ORIGIN SELECTION REASONING (mandatory, silent):
+            Before assigning coordinates ask: "Is this part symmetric? Is there a marked datum?
+            Is there a centerline?" → pick rule 1, 2, or 3. Apply consistently across ALL views.
+
+          QUADRANT MAPPING:
+            +x, +y  → upper-right   (standard positive quadrant)
+            −x, +y  → upper-left
+            +x, −y  → lower-right
+            −x, −y  → lower-left
+            Coordinates may be negative — there is NO "all non-negative" constraint
+            when rule 1 or rule 3 applies.
+
+          CONSISTENCY:
+            - The chosen origin rule MUST be applied identically to every view in the same drawing.
+            - Missing dimensions in one view must be inferred from the corresponding dimension
+              in another view, preserving sign convention.
+            - Trace contour starting from the lowest point on the leftmost edge, proceeding sequentially.
           </COORDINATE_SYSTEM>
+
+          <FLAT_PLATE_DETECTION>
+          PURPOSE: Identify flat plate parts early so that only the true profile face is extracted
+          and the thickness is surfaced as an extrude depth — not buried as a view entity.
+
+          DETECTION (mandatory silent reasoning — execute before writing any JSON):
+
+            STEP 1 — MEASURE THE THREE PRINCIPAL DIMENSIONS
+              Read or estimate L (length), W (width), T (thickness) from the drawing.
+              Assign: longest = max(L,W,T), mid = median(L,W,T), shortest = min(L,W,T)
+              Flat plate condition:
+                shortest / longest < 0.25
+                AND shortest / mid   < 0.25
+              If TRUE  → FLAT PLATE MODE engaged. Continue to Steps 2–4.
+              If FALSE → Normal multi-view mode. Skip this section entirely.
+
+            STEP 2 — ELECT THE MAIN FACE VIEW
+              Score every visible view on these four signals, in priority order.
+              The view with the highest score wins. Ties broken by the next signal down.
+
+              SIGNAL A — Feature richness (PRIMARY, weight 4):
+                Count internal features in each view: holes (circles), slots, cutouts,
+                fillets, chamfers, internal edges, centerlines for features.
+                The view with the MOST internal features scores 4. All others score 0.
+                A view that shows only a plain rectangle with no internal features
+                cannot win on this signal.
+
+              SIGNAL B — Bounding-box area (weight 2):
+                Compute approximate area = width × height for each view's bounding box.
+                The view with the LARGEST area scores 2. Others score 0.
+
+              SIGNAL C — Drawing label (weight 1):
+                If a view is explicitly labeled "top" or "front" (or equivalent in the
+                drawing's language), that view scores 1. Unlabeled or "right"/"side"
+                views score 0.
+
+              SIGNAL D — Two-large-dimension span (tiebreaker, weight 1):
+                The view whose bounding box spans the two LARGE dimensions (L × W,
+                neither axis ≈ T) scores 1. A view whose shorter axis ≈ T scores 0.
+
+              ELECTION RESULT — mandatory silent conclusion:
+                "Main face elected: ___ view (score ___). Reason: [signals that fired]."
+                This elected view is the ONLY view emitted in the JSON "views" array.
+                All other views are discarded from output — consulted only for thickness.
+
+            STEP 3 — IDENTIFY AND RECORD THICKNESS
+              Thickness T is the single small dimension visible in the edge or side view
+              (any view that was NOT elected as the main face).
+              Sources in order of priority:
+                a. An explicit dimension annotation labelling the thin edge (e.g. "6.0", "THK 4").
+                b. A note in the title block or drawing (e.g. "t = 4", "MATERIAL THK 3.0").
+                c. The height of the non-elected view's bounding box when that view shows
+                   only a thin rectangle with no internal features visible.
+              Conclude: "Thickness = ___mm, read from ___."
+
+            STEP 4 — CONFIRM OUTPUT SCOPE
+              In FLAT PLATE MODE:
+                • Extract full entity geometry from the ELECTED MAIN FACE VIEW only.
+                • All holes, slots, cutouts, and fillets visible in that face are included.
+                • Any detail view that zooms into a region of the main face is still part of
+                  the main face — merge its entities into the single view output.
+                • All non-elected views are consulted for thickness ONLY — their geometry is discarded.
+                • Set "part_type": "flat_plate" in metadata.
+                • Set "extrude_depth": T (the thickness from Step 3) in metadata.
+                • Set "main_face_reason": one-line string summarising which signals fired
+                  (e.g. "most features + largest area + labeled top").
+                • The "views" array contains EXACTLY ONE entry: the elected main face view.
+                • That view's "name" field matches the actual drawing label ("top", "front", etc.).
+              Conclude: "FLAT PLATE MODE confirmed. Emitting ___ view only. extrude_depth = ___mm."
+
+          FLAT PLATE TRAPS — never do these:
+            ✗ Do NOT trace the rectangular outline of any non-elected view as geometry entities.
+            ✗ Do NOT add a second "views" entry for any edge, side, or thin-rectangle view.
+            ✗ Do NOT mistake a detail view for the edge view — detail views belong to the main face.
+            ✗ Do NOT encode thickness as a coordinate, entity length, or any geometry value.
+            ✗ Do NOT skip internal features (holes, slots, cutouts) present in the elected main face.
+            ✗ Do NOT elect a plain thin-rectangle view as main face — it can NEVER win SIGNAL A.
+            ✗ Do NOT emit two views because the drawing shows two large views — only the elected one.
+          </FLAT_PLATE_DETECTION>
 
           <OUTPUT_FORMAT>
           Output "VERIFIED" then immediately the JSON. Nothing else.
+
+          ── NORMAL MODE (part is NOT a flat plate) ───────────────────────────────
 
           {
             "views": [
               {
                 "name": "front",
-                "entities": [
-                  {
-                    "type": "LINE",
-                    "start_x": 0.000,
-                    "start_y": 0.000,
-                    "end_x": 0.000,
-                    "end_y": 0.000
-                  },
-                  {
-                    "type": "ARC",
-                    "center_x": 0.000,
-                    "center_y": 0.000,
-                    "radius": 0.000,
-                    "start_angle_deg": 0.000,
-                    "end_angle_deg": 0.000,
-                    "start_x": 0.000,
-                    "start_y": 0.000,
-                    "end_x": 0.000,
-                    "end_y": 0.000,
-                    "clockwise": true
-                  },
-                  {
-                    "type": "CIRCLE",
-                    "center_x": 0.000,
-                    "center_y": 0.000,
-                    "radius": 0.000
-                  }
-                ]
+                "origin_rule": "centered | bottom-left | explicit",
+                "entities": [ ... ]
               }
             ],
             "metadata": { "units": "mm", "scale": 1 }
           }
 
-          Angle convention: 0° = +X axis, 90° = +Y axis, counterclockwise positive.
-          "clockwise": boolean — true if the arc travels clockwise from start to end.
+          ── FLAT PLATE MODE (part IS a flat plate) ───────────────────────────────
+          Exactly ONE view in "views" (the elected main face). Metadata gains part_type,
+          extrude_depth, and main_face_reason.
+
+          {
+            "views": [
+              {
+                "name": "top",
+                "origin_rule": "centered | bottom-left | explicit",
+                "is_main_face": true,
+                "entities": [
+                  {
+                    "type": "LINE",
+                    "start_x": 0.000, "start_y": 0.000,
+                    "end_x": 0.000,   "end_y": 0.000
+                  },
+                  {
+                    "type": "ARC",
+                    "center_x": 0.000, "center_y": 0.000, "radius": 0.000,
+                    "start_angle_deg": 0.000, "end_angle_deg": 0.000,
+                    "start_x": 0.000, "start_y": 0.000,
+                    "end_x": 0.000,   "end_y": 0.000,
+                    "clockwise": true
+                  },
+                  {
+                    "type": "CIRCLE",
+                    "center_x": 0.000, "center_y": 0.000, "radius": 0.000
+                  }
+                ]
+              }
+            ],
+            "metadata": {
+              "units": "mm",
+              "scale": 1,
+              "part_type": "flat_plate",
+              "extrude_depth": 0.000,
+              "main_face_reason": "most features + largest area + labeled top"
+            }
+          }
+
+          Field reference:
+            "clockwise"        — true if the arc travels clockwise from start_angle to end_angle.
+            "origin_rule"      — "centered", "bottom-left", or "explicit".
+            "is_main_face"     — boolean true, present ONLY on the single view in FLAT PLATE MODE.
+            "part_type"        — "flat_plate", present ONLY in FLAT PLATE MODE metadata.
+            "extrude_depth"    — thickness in mm, present ONLY in FLAT PLATE MODE metadata.
+            "main_face_reason" — short string, present ONLY in FLAT PLATE MODE metadata.
+                                 Summarises which election signals determined the main face.
+            Angle convention: 0° = +X axis, 90° = +Y axis, counterclockwise positive.
           </OUTPUT_FORMAT>

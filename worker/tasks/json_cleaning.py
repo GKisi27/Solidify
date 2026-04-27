@@ -6,6 +6,7 @@ from celery import shared_task
 
 from app.services.convert import (
     convert_json_format,
+    make_output_paths,
 )
 
 
@@ -44,6 +45,8 @@ def clean_json_task(
         }
     """
     from worker.utils.cancellation import is_cancelled, clear_cancellation
+    
+    print(previous_result['gemini_json'])
 
     # Propagate failure from previous task — includes cancellations
     if not previous_result.get("success", False):
@@ -73,6 +76,12 @@ def clean_json_task(
 
         converted_json = convert_json_format(gemini_json)
 
+        # Save converted JSON to file
+        _, converted_path = make_output_paths(file_stem)
+        converted_path.write_text(
+            json.dumps(converted_json, indent=2),
+            encoding="utf-8"
+        )
         return {
             "converted_json": converted_json,
             "gemini_json": gemini_json,

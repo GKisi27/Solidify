@@ -14,6 +14,7 @@ from app.services.convert import (
     call_gemini,
     open_image,
     prepare_image,
+    make_output_paths,
 )
 
 
@@ -95,6 +96,13 @@ def generate_json_task(
             model=cfg["gemini_model"],
         )
 
+        # Save JSON to file
+        gemini_path, _ = make_output_paths(file_stem)
+        gemini_path.write_text(
+            json.dumps(gemini_json, indent=2, ensure_ascii=False),
+            encoding="utf-8"
+        )
+        
         return {
             "gemini_json": gemini_json,
             "file_stem": file_stem,

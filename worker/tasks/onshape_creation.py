@@ -106,7 +106,9 @@ def create_onshape_model_task(
                 features_url=features_url,
                 views=views,
                 stop_event=None,
+                metadata=converted_json.get("metadata", {}),
             )
+
 
         doc_url = f"{cfg['onshape_base']}/documents/{did}/w/{wid}/e/{eid}"
 
