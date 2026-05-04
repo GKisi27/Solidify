@@ -21,7 +21,7 @@ prompt: |
           12. Detail view given for minute details, use this view properly.
           13. FLAT PLATE MODE (when triggered by <FLAT_PLATE_DETECTION>):
               The ELECTED main face view (determined in STEP 2) is the ONLY view output in "views".
-              All other views — edge, side, auxiliary, thin-rectangle views — are consulted for
+              All other views — edge, side, auxiliary, thin-rectangle views — are codnsulted for
               thickness only. Their geometry is NEVER emitted.
               The "views" array contains EXACTLY ONE entry: the elected main face view.
           </HARD_RULES>

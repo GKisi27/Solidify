@@ -927,54 +927,19 @@ class OnshapeSession:
 
 
     def build_plate(self, features_url: str, views: list[dict], stop_event=None, metadata: dict = None) -> None:
-        """Extrude-intersect plate workflow."""
-        prev_fid: str | None = None
-        
-         # ── NEW: flat-plate short-circuit ────────────────────────────────────
+        """Single-view extrude for flat plates only."""
         meta = metadata or {}
-        if meta.get("part_type") == "flat_plate":
-            view = next((v for v in views if v.get("is_main_face")), views[0] if views else None)
-            if view:
-                depth     = meta.get("extrude_depth", 1000)
-                view_name = view.get("name", "front").lower()
-                entities  = view.get("entities", [])
-                sketch_ents = build_sketch_entities(entities)
-                sketch_fid  = self.add_sketch(features_url, f"Sketch ({view_name})", view_name, sketch_ents, view_entities=entities)
-                self.add_extrude(features_url, f"Extrude ({view_name})", sketch_fid, depth=depth, symmetric=True)
+        depth = meta.get("extrude_depth", 10)  # fallback in mm
+
+        view = next((v for v in views if v.get("is_main_face")), views[0] if views else None)
+        if not view:
             return
-   
 
-        for idx, view in enumerate(views, start=1):
-            if stop_event and stop_event.is_set():
-                print("Cancelled during build_plate")
-                return
-            view_name = view.get("name", f"view{idx}").lower()
-            if view_name not in self.SUPPORTED_VIEWS:
-                continue
-
-            entities = view.get("entities", [])
-            if not entities:
-                continue
-
-            sketch_entities = build_sketch_entities(entities)
-            sketch_fid = self.add_sketch(
-                    features_url,
-                    f"Sketch {idx} ({view_name})",
-                    view_name,
-                    sketch_entities,
-                    view_entities=entities,      
-)
-
-            operation         = "NEW" if prev_fid is None else "INTERSECT"
-            opposite_dir      = prev_fid is None         
-
-            prev_fid = self.add_extrude(
-                features_url,
-                f"Extrude {idx} ({view_name})",
-                sketch_fid,
-                operation=operation,
-                opposite_direction=opposite_dir,
-            )
+        view_name = view.get("name", "front").lower()
+        entities  = view.get("entities", [])
+        sketch_ents = build_sketch_entities(entities)
+        sketch_fid  = self.add_sketch(features_url, f"Sketch ({view_name})", view_name, sketch_ents, view_entities=entities)
+        self.add_extrude(features_url, f"Extrude ({view_name})", sketch_fid, depth=f"{depth} mm", symmetric=True)
 
     def build_shaft(
             self,
@@ -1065,6 +1030,43 @@ class OnshapeSession:
                     operation=operation,
                 )
                 time.sleep(0.2)
+        
+    def build_multiview_plate(self, features_url: str, views: list[dict], stop_event=None) -> None:
+                    """Extrude-intersect workflow for non-flat plates."""
+                    prev_fid: str | None = None
+
+                    for idx, view in enumerate(views, start=1):
+                        if stop_event and stop_event.is_set():
+                            print("Cancelled during build_multiview_plate")
+                            return
+                        view_name = view.get("name", f"view{idx}").lower()
+                        if view_name not in self.SUPPORTED_VIEWS:
+                            continue
+
+                        entities = view.get("entities", [])
+                        if not entities:
+                            continue
+
+                        sketch_entities = build_sketch_entities(entities)
+                        sketch_fid = self.add_sketch(
+                            features_url,
+                            f"Sketch {idx} ({view_name})",
+                            view_name,
+                            sketch_entities,
+                            view_entities=entities,
+                        )
+
+                        operation    = "NEW" if prev_fid is None else "INTERSECT"
+                        opposite_dir = prev_fid is None
+
+                        prev_fid = self.add_extrude(
+                            features_url,
+                            f"Extrude {idx} ({view_name})",
+                            sketch_fid,
+                            operation=operation,
+                            opposite_direction=opposite_dir,
+                            depth="1000 mm",
+                        )
             
 # This pipeline is used to convert 2D images to 3D models in OnShape
 
@@ -1127,14 +1129,17 @@ def convert_to_3d(
     features_url = session.features_url(did, wid, eid)
     if cancelled():
         return None
-    is_shaft = "revolve_axis" in converted_json
+    is_shaft     = "revolve_axis" in converted_json
+    is_flat_plate = converted_json.get("metadata", {}).get("part_type") == "flat_plate"
     revolve_axis = converted_json.get("revolve_axis")
     views        = converted_json.get("views", [])
 
     if is_shaft:
         session.build_shaft(features_url, views, revolve_axis)
+    elif is_flat_plate:
+        session.build_plate(features_url, views, metadata=converted_json.get("metadata", {}))
     else:
-       session.build_plate(features_url, views, metadata=converted_json.get("metadata", {}))
+        session.build_multiview_plate(features_url, views)
 
     # print(gemini_path, converted_path)
 

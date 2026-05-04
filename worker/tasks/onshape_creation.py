@@ -90,9 +90,10 @@ def create_onshape_model_task(
         did, wid, eid = session.create_document("3D Model - " + file_stem)
         features_url = session.features_url(did, wid, eid)
 
-        is_shaft = "revolve_axis" in converted_json
-        revolve_axis = converted_json.get("revolve_axis")
-        views = converted_json.get("views", [])
+        is_shaft      = "revolve_axis" in converted_json
+        is_flat_plate = converted_json.get("metadata", {}).get("part_type") == "flat_plate"
+        revolve_axis  = converted_json.get("revolve_axis")
+        views         = converted_json.get("views", [])
 
         if is_shaft:
             session.build_shaft(
@@ -101,12 +102,18 @@ def create_onshape_model_task(
                 revolve_axis=revolve_axis,
                 stop_event=None,
             )
-        else:
+        elif is_flat_plate:
             session.build_plate(
                 features_url=features_url,
                 views=views,
                 stop_event=None,
                 metadata=converted_json.get("metadata", {}),
+            )
+        else:
+            session.build_multiview_plate(
+                features_url=features_url,
+                views=views,
+                stop_event=None,
             )
 
 
