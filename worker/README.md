@@ -235,3 +235,7 @@ echo $CELERY_BROKER_URL
 - [Celery Documentation](https://docs.celeryq.dev/)
 - [Flower Documentation](https://flower.readthedocs.io/)
 - [Redis Documentation](https://redis.io/documentation)
+
+## Docker Shortcut
+docker compose -f docker-compose.dev.yml up --build
+docker compose down --remove-orphans 
